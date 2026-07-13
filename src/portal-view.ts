@@ -100,11 +100,19 @@ export class PortalView extends ItemView {
     });
 
     // Native page preview on hover (core "Page preview" plugin listens).
+    // Deduped by path so a stationary cursor over sliding content (e.g. during
+    // the sidebar animation) doesn't re-fire the preview every frame.
+    let lastHoverPath = '';
     this.registerDomEvent(this.contentEl, 'mouseover', (event: MouseEvent) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
       const row = target.closest('[data-path]');
-      if (!(row instanceof HTMLElement) || !row.dataset.path) return;
+      if (!(row instanceof HTMLElement) || !row.dataset.path) {
+        lastHoverPath = '';
+        return;
+      }
+      if (row.dataset.path === lastHoverPath) return;
+      lastHoverPath = row.dataset.path;
       this.app.workspace.trigger('hover-link', {
         event,
         source: 'portal',

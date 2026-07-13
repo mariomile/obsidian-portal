@@ -92,6 +92,8 @@
 
 .portal-section-body {
   padding-block: 2px;
+  /* Isolate each section's reflow from the rest of the rail/workspace. */
+  contain: layout style;
 }
 /* Empty (built-but-no-content) sections read as intentional, not broken. */
 .portal-section-body:empty::after {
@@ -117,6 +119,11 @@
   font-size: var(--font-ui-small, 0.85rem);
   line-height: 1.5;
   transition: background-color var(--portal-motion), color var(--portal-motion);
+  /* Off-screen rows skip layout + paint, so the sidebar's width animation
+     (and any resize) stays smooth even with a large expanded tree — a CSS
+     stand-in for the virtualization Obsidian's native explorer uses. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 28px;
 }
 .portal-tree-row:hover {
   background-color: var(--portal-wash);
