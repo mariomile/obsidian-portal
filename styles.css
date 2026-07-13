@@ -27,6 +27,9 @@
 .portal-section {
   margin-bottom: var(--size-4-3, 12px);
 }
+.portal-section-hidden {
+  display: none;
+}
 
 /* --- collapsible section header -------------------------------------------- */
 .portal-section-header {

@@ -67,3 +67,43 @@ export function executeCommand(app: App, id: string): boolean {
     ? commands.executeCommandById(id)
     : false;
 }
+
+interface BookmarkItem {
+  type: string;
+  path?: string;
+  title?: string;
+  items?: BookmarkItem[];
+}
+interface BookmarksInstance {
+  getBookmarks?(): BookmarkItem[];
+}
+
+export interface Bookmark {
+  type: 'file' | 'folder';
+  path: string;
+  title: string;
+}
+
+/** Native Bookmarks core-plugin entries, flattened to files/folders. */
+export function getBookmarks(app: App): Bookmark[] {
+  const internals = (app as unknown as AppWithInternals).internalPlugins;
+  const instance = internals?.getPluginById('bookmarks')?.instance as
+    | BookmarksInstance
+    | undefined;
+  const out: Bookmark[] = [];
+  const walk = (items: BookmarkItem[]): void => {
+    for (const item of items) {
+      if ((item.type === 'file' || item.type === 'folder') && item.path) {
+        out.push({
+          type: item.type,
+          path: item.path,
+          title: item.title || (item.path.split('/').pop() ?? item.path),
+        });
+      } else if (item.type === 'group' && item.items) {
+        walk(item.items);
+      }
+    }
+  };
+  walk(instance?.getBookmarks?.() ?? []);
+  return out;
+}

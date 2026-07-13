@@ -6,6 +6,8 @@ import { FoldersSection } from './sections/folders';
 import { TagsSection } from './sections/tags';
 import { CollectionsSection } from './sections/collections';
 import { PinnedSection, RecentSection } from './sections/pins-recent';
+import { BookmarksSection } from './sections/bookmarks';
+import { getBookmarks } from './obsidian-internals';
 import { JumpInput } from './nav/jump';
 import { showFileMenu, createNote, type MenuActions } from './nav/context-menu';
 import { mountToolbar, type ToolbarActions } from './nav/toolbar';
@@ -17,7 +19,14 @@ export const PORTAL_VIEW_TYPE = 'portal';
 
 /** Fixed top→bottom order of the rail (R2). Sections are filled by their units:
  *  Folders (U3), Tags (U4), Collections (U5), Pinned + Recent (U6). */
-const SECTIONS = ['Pinned', 'Recent', 'Folders', 'Tags', 'Collections'] as const;
+const SECTIONS = [
+  'Pinned',
+  'Bookmarks',
+  'Recent',
+  'Folders',
+  'Tags',
+  'Collections',
+] as const;
 
 /**
  * Portal's sidebar rail. Mounts the labelled section containers in order and
@@ -30,6 +39,7 @@ export class PortalView extends ItemView {
   private collections: CollectionsSection | null = null;
   private pinned: PinnedSection | null = null;
   private recent: RecentSection | null = null;
+  private bookmarks: BookmarksSection | null = null;
 
   constructor(leaf: WorkspaceLeaf, ctx: PortalContext) {
     super(leaf);
@@ -165,6 +175,16 @@ export class PortalView extends ItemView {
       this.pinned = new PinnedSection(this.ctx, pinnedBody);
       this.pinned.render();
     }
+    const bookmarksBody = bodies.get('bookmarks');
+    if (bookmarksBody) {
+      this.bookmarks = new BookmarksSection(this.ctx, bookmarksBody);
+      this.bookmarks.render();
+      // Only surface the Bookmarks section when there are native bookmarks —
+      // no clutter for users (like Mario) who rely on Portal's own Pinned.
+      if (getBookmarks(this.app).length === 0) {
+        bookmarksBody.closest('.portal-section')?.addClass('portal-section-hidden');
+      }
+    }
     const recentBody = bodies.get('recent');
     if (recentBody) {
       this.recent = new RecentSection(this.ctx, recentBody);
@@ -267,6 +287,7 @@ export class PortalView extends ItemView {
     this.collections = null;
     this.pinned = null;
     this.recent = null;
+    this.bookmarks = null;
     this.contentEl.empty();
     this.contentEl.removeClass('portal-rail');
   }
