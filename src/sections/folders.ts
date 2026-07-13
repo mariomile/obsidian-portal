@@ -44,6 +44,8 @@ export class FoldersSection {
     row.dataset.path = folder.path;
     const twisty = row.createSpan({ cls: 'portal-twisty' });
     setIcon(twisty, expanded ? 'chevron-down' : 'chevron-right');
+    const icon = row.createSpan({ cls: 'portal-row-icon' });
+    setIcon(icon, expanded ? 'folder-open' : 'folder');
     row.createSpan({ cls: 'portal-label', text: folder.name });
     row.addEventListener('click', () => {
       void this.toggleFolder(folder.path);
@@ -65,6 +67,8 @@ export class FoldersSection {
     row.dataset.path = file.path;
     // Files have no twisty — an empty spacer keeps labels aligned with folders.
     row.createSpan({ cls: 'portal-twisty portal-twisty-empty' });
+    const icon = row.createSpan({ cls: 'portal-row-icon' });
+    setIcon(icon, file.extension === 'md' ? 'file-text' : 'file');
     const label = file.extension === 'md' ? file.basename : file.name;
     row.createSpan({ cls: 'portal-label', text: label });
     row.addEventListener('click', () => {

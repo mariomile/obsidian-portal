@@ -25,7 +25,7 @@
 }
 
 .portal-section {
-  margin-bottom: var(--size-4-1, 4px);
+  margin-bottom: var(--size-4-3, 12px);
 }
 
 /* --- collapsible section header -------------------------------------------- */
@@ -99,29 +99,53 @@
   opacity: 0.4;
 }
 
-/* --- tree rows (folders, files, tags, pins, recents, collections) --------- */
+/* --- tree rows (folders, files, tags, pins, recents, collections) ---------
+   Craft-airy: comfortable height, a per-row icon slot, generous gap. */
 .portal-tree-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 6px;
-  padding-inline-start: calc(6px + var(--portal-depth, 0) * var(--portal-indent));
-  border-radius: var(--radius-s, 4px);
+  gap: 5px;
+  min-height: 28px;
+  padding: 4px 8px;
+  padding-inline-start: calc(8px + var(--portal-depth, 0) * var(--portal-indent));
+  border-radius: 7px;
   cursor: var(--cursor, pointer);
   color: var(--text-normal);
-  font-size: var(--font-ui-small, 0.8rem);
-  line-height: 1.4;
+  font-size: var(--font-ui-small, 0.85rem);
+  line-height: 1.5;
   transition: background-color var(--portal-motion), color var(--portal-motion);
 }
 .portal-tree-row:hover {
   background-color: var(--portal-wash);
 }
-/* Selection marked by WEIGHT + accent (macOS/Craft/Cosmos convention), on a
-   soft wash rather than the flat hover fill so active ≠ merely hovered. */
+/* Selection = a filled rounded pill with weight (Craft convention), NOT accent
+   text — the fill carries the state so the rail stays calm. */
 .portal-file.is-active {
   background-color: var(--portal-wash-strong);
-  color: var(--text-accent);
+  color: var(--text-normal);
   font-weight: var(--font-medium, 500);
+}
+
+/* Per-row leaf icon (folder / file / #tag), left of the label. */
+.portal-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  color: var(--text-muted);
+  transition: color var(--portal-motion);
+}
+.portal-row-icon svg {
+  width: 15px;
+  height: 15px;
+}
+.portal-tree-row:hover .portal-row-icon {
+  color: var(--text-normal);
+}
+.portal-folder > .portal-row-icon {
+  color: var(--text-accent);
 }
 
 /* --- twisties (folder / tag tree) ----------------------------------------- */

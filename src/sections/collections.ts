@@ -44,7 +44,8 @@ export class CollectionsSection {
     const row = this.containerEl.createDiv({
       cls: 'portal-tree-row portal-collection',
     });
-    const icon = row.createSpan({ cls: 'portal-collection-icon' });
+    row.createSpan({ cls: 'portal-twisty portal-twisty-empty' });
+    const icon = row.createSpan({ cls: 'portal-collection-icon portal-row-icon' });
     icon.setText(collection.icon ?? '◆');
     row.createSpan({ cls: 'portal-label', text: collection.name });
     row.createSpan({ cls: 'portal-count', text: String(collection.count) });

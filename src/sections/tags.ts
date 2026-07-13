@@ -30,8 +30,9 @@ export class TagsSection {
   private renderNode(node: TagNode, depth: number): void {
     const row = this.containerEl.createDiv({ cls: 'portal-tree-row portal-tag' });
     row.style.setProperty('--portal-depth', String(depth));
-    const twisty = row.createSpan({ cls: 'portal-twisty' });
-    if (node.children.length > 0) setIcon(twisty, 'hash');
+    row.createSpan({ cls: 'portal-twisty portal-twisty-empty' });
+    const icon = row.createSpan({ cls: 'portal-row-icon' });
+    setIcon(icon, 'hash');
     row.createSpan({ cls: 'portal-label', text: node.segment });
     row.createSpan({ cls: 'portal-count', text: String(node.count) });
     row.addEventListener('click', () => {

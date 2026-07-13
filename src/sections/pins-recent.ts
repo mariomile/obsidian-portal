@@ -1,4 +1,4 @@
-import { TFile } from 'obsidian';
+import { TFile, TFolder, setIcon } from 'obsidian';
 import type { PortalContext } from '../types';
 
 const RECENT_LIMIT = 15;
@@ -29,6 +29,9 @@ export class PinnedSection {
       const file = this.ctx.app.vault.getAbstractFileByPath(path);
       const row = this.containerEl.createDiv({ cls: 'portal-tree-row portal-pin' });
       row.dataset.path = path;
+      row.createSpan({ cls: 'portal-twisty portal-twisty-empty' });
+      const icon = row.createSpan({ cls: 'portal-row-icon' });
+      setIcon(icon, file instanceof TFolder ? 'folder' : 'file-text');
 
       if (file instanceof TFile) {
         const label = file.extension === 'md' ? file.basename : file.name;
@@ -94,6 +97,9 @@ export class RecentSection {
       rendered += 1;
       const row = this.containerEl.createDiv({ cls: 'portal-tree-row portal-recent' });
       row.dataset.path = path;
+      row.createSpan({ cls: 'portal-twisty portal-twisty-empty' });
+      const icon = row.createSpan({ cls: 'portal-row-icon' });
+      setIcon(icon, 'file-text');
       const label = file.extension === 'md' ? file.basename : file.name;
       row.createSpan({ cls: 'portal-label', text: label });
       row.addEventListener('click', () => {
