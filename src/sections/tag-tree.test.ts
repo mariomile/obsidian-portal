@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildTagTree } from './tag-tree.ts';
+import { buildTagTree, isLikelyHexColor } from './tag-tree.ts';
+
+test('isLikelyHexColor flags hex colours but spares real tags', () => {
+  assert.equal(isLikelyHexColor('#1e1e1e'), true);
+  assert.equal(isLikelyHexColor('0D046A'), true);
+  assert.equal(isLikelyHexColor('#2E3142'), true);
+  assert.equal(isLikelyHexColor('#fff'), false); // no digit → could be a word-ish tag
+  assert.equal(isLikelyHexColor('beef'), false); // hex letters but a real word
+  assert.equal(isLikelyHexColor('type/log'), false);
+  assert.equal(isLikelyHexColor('career'), false);
+  assert.equal(isLikelyHexColor('1a2b3c4d5'), false); // 9 chars, not a colour length
+});
 
 test('buildTagTree nests by slash and subtotals ancestors', () => {
   const tree = buildTagTree({

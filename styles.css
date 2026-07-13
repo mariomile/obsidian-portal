@@ -295,8 +295,44 @@
   border-radius: var(--radius-s, 4px);
 }
 
-/* --- one-thumb: bigger touch targets on phone ----------------------------- */
-body.is-phone .portal-section-header,
-body.is-phone .portal-tree-row {
-  min-height: var(--cosmos-touch-min, 40px);
+/* --- fixed nav block (New document / All Docs / Tasks / Calendar) --------- */
+.portal-nav {
+  padding: 0 var(--size-4-1, 4px) var(--size-4-2, 8px);
+  margin-bottom: var(--size-4-1, 4px);
+  border-bottom: var(--hairline, 1px) solid var(--background-modifier-border);
+}
+.portal-nav-row {
+  font-weight: var(--font-medium, 500);
+}
+.portal-nav-row .portal-row-icon {
+  color: var(--text-normal);
+}
+
+/* --- mobile slice: touch targets + always-on affordances -----------------
+   On phone the sidebar is a full-screen drawer; hover doesn't exist, so
+   normally-hover-revealed controls (unpin ×) are shown, and every tappable
+   row/control meets the 44pt Apple HIG minimum. */
+@media (pointer: coarse) {
+  .portal-tree-row,
+  .portal-nav-row,
+  .portal-section-header,
+  .portal-jump-hit {
+    min-height: 44px;
+  }
+  .portal-jump-input {
+    min-height: 40px;
+  }
+  .portal-tool {
+    width: 40px;
+    height: 40px;
+  }
+  .portal-pin-remove {
+    opacity: 1;
+    width: 28px;
+  }
+}
+body.is-phone .portal-tree-row,
+body.is-phone .portal-nav-row,
+body.is-phone .portal-section-header {
+  min-height: var(--cosmos-touch-min, 44px);
 }

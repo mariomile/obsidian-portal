@@ -13,6 +13,8 @@ export interface PortalSettings {
   expandedFolders: string[];
   /** User-curated pinned file/folder paths (U6). */
   pinned: string[];
+  /** Hide hex-colour tokens (e.g. #1e1e1e) that Obsidian counts as tags. */
+  hideHexTags: boolean;
   /** Rail section keys (lower-cased, e.g. 'tags') that are collapsed. Default
    *  empty → every section starts expanded, so a fresh install never hides a
    *  user's content; a section is added here only when the user folds it. */
@@ -23,6 +25,7 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   hideNativeExplorer: true,
   expandedFolders: [],
   pinned: [],
+  hideHexTags: true,
   collapsedSections: [],
 };
 
@@ -41,6 +44,10 @@ export function parseSettings(raw: unknown): PortalSettings {
         : DEFAULT_SETTINGS.hideNativeExplorer,
     expandedFolders: asStringArray(data.expandedFolders, DEFAULT_SETTINGS.expandedFolders),
     pinned: asStringArray(data.pinned, DEFAULT_SETTINGS.pinned),
+    hideHexTags:
+      typeof data.hideHexTags === 'boolean'
+        ? data.hideHexTags
+        : DEFAULT_SETTINGS.hideHexTags,
     collapsedSections: asStringArray(data.collapsedSections, DEFAULT_SETTINGS.collapsedSections),
   };
 }
@@ -70,6 +77,21 @@ export class PortalSettingTab extends PluginSettingTab {
             this.plugin.settings.hideNativeExplorer = value;
             await this.plugin.saveSettings();
             this.plugin.applyExplorerVisibility();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Hide hex-colour tags')
+      .setDesc(
+        'Exclude hex-colour tokens (e.g. #1e1e1e) that Obsidian counts as tags but are just colours written in notes.',
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.hideHexTags)
+          .onChange(async (value) => {
+            this.plugin.settings.hideHexTags = value;
+            await this.plugin.saveSettings();
+            this.plugin.refreshRail();
           }),
       );
   }

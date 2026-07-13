@@ -23,6 +23,18 @@ function sortNodes(nodes: TagNode[]): void {
 }
 
 /**
+ * True when a tag looks like a hex colour written in a note (e.g. `#1e1e1e`,
+ * `#0D046A`) rather than a real tag. Hex colours are 3/4/6/8 hex chars with at
+ * least one digit — the digit requirement spares real words like `beef`/`cafe`.
+ */
+export function isLikelyHexColor(rawTag: string): boolean {
+  const tag = rawTag.replace(/^#/, '');
+  if (!/^[0-9a-fA-F]+$/.test(tag)) return false;
+  if (![3, 4, 6, 8].includes(tag.length)) return false;
+  return /[0-9]/.test(tag);
+}
+
+/**
  * Build a nested tree from a flat `{ "#type/log": count }` map (the shape
  * `metadataCache.getTags()` returns). Each node's count accumulates its own
  * and all descendant tag counts, so parents read as subtotals.

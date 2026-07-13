@@ -1,6 +1,6 @@
 import { setIcon } from 'obsidian';
 import type { PortalContext } from '../types';
-import { buildTagTree, type TagNode } from './tag-tree.ts';
+import { buildTagTree, isLikelyHexColor, type TagNode } from './tag-tree.ts';
 import { getVaultTags, openGlobalSearch } from '../obsidian-internals';
 
 /**
@@ -19,7 +19,13 @@ export class TagsSection {
 
   render(): void {
     this.containerEl.empty();
-    const tree = buildTagTree(getVaultTags(this.ctx.app));
+    const raw = getVaultTags(this.ctx.app);
+    const source = this.ctx.settings.hideHexTags
+      ? Object.fromEntries(
+          Object.entries(raw).filter(([tag]) => !isLikelyHexColor(tag)),
+        )
+      : raw;
+    const tree = buildTagTree(source);
     if (tree.length === 0) {
       this.containerEl.createDiv({ cls: 'portal-empty', text: 'No tags' });
       return;

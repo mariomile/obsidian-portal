@@ -72,6 +72,14 @@ export default class PortalPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
+  /** Rebuild any open Portal rail (used after settings that change rendering). */
+  refreshRail(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(PORTAL_VIEW_TYPE)) {
+      const view = leaf.view;
+      if (view instanceof PortalView) void view.onOpen();
+    }
+  }
+
   /** Toggle the native-explorer hide to match the current setting. */
   applyExplorerVisibility(): void {
     this.setExplorerHidden(this.settings.hideNativeExplorer);

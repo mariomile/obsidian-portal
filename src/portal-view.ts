@@ -8,6 +8,7 @@ import { PinnedSection, RecentSection } from './sections/pins-recent';
 import { JumpInput } from './nav/jump';
 import { showFileMenu, createNote, type MenuActions } from './nav/context-menu';
 import { mountToolbar, type ToolbarActions } from './nav/toolbar';
+import { mountNavBlock } from './nav/nav-block';
 import { startInlineRename } from './nav/rename';
 import type { TAbstractFile } from 'obsidian';
 
@@ -50,7 +51,8 @@ export class PortalView extends ItemView {
     this.contentEl.empty();
     this.contentEl.addClass('portal-rail');
 
-    // Jump box + toolbar sit above every section (U7 / tools).
+    // Craft-style fixed nav block, then jump + toolbar, above every section.
+    mountNavBlock(this.app, this.contentEl);
     new JumpInput(this.ctx, this.contentEl, (path) => this.revealInTree(path)).mount();
     mountToolbar(this.contentEl, this.toolbarActions());
 
