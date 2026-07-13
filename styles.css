@@ -1,3 +1,32 @@
 /* Portal — Craft-style unified navigator.
-   Styling lands in U10 (Cosmos-tuned, quiet typographic rail).
-   This file must exist for the esbuild deploy step to copy it into the vault. */
+   Full Cosmos-tuned styling lands in U10; this is placeholder geometry. */
+
+/* --- U2: hide the native file explorer when Portal governs navigation ------
+   CSS-hide (not detach) keeps the core file-explorer plugin ALIVE, so
+   reveal-in-folder and any third-party plugin depending on it keep working.
+   The `portal-hidden-leaf` class is applied in JS to the explorer's
+   `.workspace-leaf` (the view type isn't a reliable DOM attribute). */
+.workspace-leaf.portal-hidden-leaf {
+  display: none;
+}
+
+/* --- U2: rail shell (placeholder geometry) --------------------------------- */
+.portal-rail {
+  padding: var(--size-4-2, 8px) 0;
+}
+.portal-section {
+  padding: 0 var(--size-4-3, 12px) var(--size-4-2, 8px);
+}
+.portal-section-header {
+  font-size: var(--font-ui-smaller, 0.75rem);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  padding: var(--size-4-1, 4px) 0;
+}
+/* Empty sections read as intentionally-unbuilt (dash) rather than broken. */
+.portal-section-body:empty::after {
+  content: '—';
+  color: var(--text-faint);
+  opacity: 0.5;
+}
