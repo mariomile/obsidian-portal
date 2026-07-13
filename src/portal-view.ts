@@ -9,7 +9,7 @@ import { PinnedSection, RecentSection } from './sections/pins-recent';
 import { BookmarksSection } from './sections/bookmarks';
 import { getBookmarks } from './obsidian-internals';
 import { JumpInput } from './nav/jump';
-import { showFileMenu, createNote, type MenuActions } from './nav/context-menu';
+import { showFileMenu, showBulkMenu, createNote, type MenuActions } from './nav/context-menu';
 import { mountToolbar, type ToolbarActions } from './nav/toolbar';
 import { mountNavBlock } from './nav/nav-block';
 import { startInlineRename } from './nav/rename';
@@ -89,6 +89,13 @@ export class PortalView extends ItemView {
       const file = this.app.vault.getAbstractFileByPath(row.dataset.path);
       if (!file) return;
       event.preventDefault();
+
+      // Bulk menu when right-clicking inside a multi-selection.
+      const selection = this.folders?.getSelection() ?? [];
+      if (selection.length > 1 && selection.includes(row.dataset.path)) {
+        showBulkMenu(this.app, selection, event, (paths) => void this.pinned?.pinAll(paths));
+        return;
+      }
       showFileMenu(this.app, file, event, row, this.menuActions());
     });
 

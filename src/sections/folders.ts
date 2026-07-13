@@ -33,6 +33,8 @@ export class FoldersSection {
 
   private filterQuery = '';
   private cursorPath: string | null = null;
+  private readonly selected = new Set<string>();
+  private lastSelected: string | null = null;
 
   /** Filter the tree live (Craft-style): show only matching files and the
    *  folders on the path to them, force-expanded. Empty query restores normal. */
@@ -50,6 +52,60 @@ export class FoldersSection {
     const filter = this.buildFilter();
     this.renderChildren(this.ctx.app.vault.getRoot(), this.containerEl, 0, filter);
     this.applyCursor();
+    this.applySelection();
+  }
+
+  getSelection(): string[] {
+    return [...this.selected];
+  }
+
+  clearSelection(): void {
+    if (this.selected.size === 0) return;
+    this.selected.clear();
+    this.lastSelected = null;
+    this.applySelection();
+  }
+
+  private toggleSelect(path: string): void {
+    if (this.selected.has(path)) this.selected.delete(path);
+    else this.selected.add(path);
+    this.lastSelected = path;
+    this.applySelection();
+  }
+
+  private rangeSelect(path: string): void {
+    const paths = Array.from(
+      this.containerEl.querySelectorAll<HTMLElement>('.portal-file[data-path]'),
+    )
+      .map((r) => r.dataset.path)
+      .filter((p): p is string => Boolean(p));
+    const from = this.lastSelected ? paths.indexOf(this.lastSelected) : -1;
+    const to = paths.indexOf(path);
+    if (from < 0 || to < 0) {
+      this.toggleSelect(path);
+      return;
+    }
+    const [lo, hi] = from < to ? [from, to] : [to, from];
+    for (let i = lo; i <= hi; i += 1) {
+      const p = paths[i];
+      if (p) this.selected.add(p);
+    }
+    this.lastSelected = path;
+    this.applySelection();
+  }
+
+  private applySelection(): void {
+    for (const el of Array.from(
+      this.containerEl.querySelectorAll('.portal-file.is-selected'),
+    )) {
+      el.removeClass('is-selected');
+    }
+    for (const path of this.selected) {
+      const row = this.containerEl.querySelector(
+        `.portal-file[data-path="${CSS.escape(path)}"]`,
+      );
+      if (row instanceof HTMLElement) row.addClass('is-selected');
+    }
   }
 
   /** Keyboard navigation over the visible tree rows (wired by the view). */
@@ -111,6 +167,9 @@ export class FoldersSection {
         }
         break;
       }
+      case 'Escape':
+        this.clearSelection();
+        break;
       default:
         break;
     }
@@ -248,7 +307,16 @@ export class FoldersSection {
     if (decor.color) icon.style.color = decor.color;
     const label = file.extension === 'md' ? file.basename : file.name;
     row.createSpan({ cls: 'portal-label', text: label });
-    row.addEventListener('click', () => {
+    row.addEventListener('click', (event) => {
+      if (event.metaKey || event.ctrlKey) {
+        this.toggleSelect(file.path);
+        return;
+      }
+      if (event.shiftKey) {
+        this.rangeSelect(file.path);
+        return;
+      }
+      this.clearSelection();
       void this.ctx.app.workspace.getLeaf(false).openFile(file);
     });
     makeDraggable(row, file.path);

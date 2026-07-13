@@ -38,6 +38,75 @@ class MoveModal extends FuzzySuggestModal<TFolder> {
   }
 }
 
+/** Folder picker that moves many items at once. */
+class BulkMoveModal extends FuzzySuggestModal<TFolder> {
+  private readonly paths: string[];
+
+  constructor(app: App, paths: string[]) {
+    super(app);
+    this.paths = paths;
+    this.setPlaceholder(`Move ${paths.length} items to folder…`);
+  }
+
+  getItems(): TFolder[] {
+    return this.app.vault
+      .getAllLoadedFiles()
+      .filter((f): f is TFolder => f instanceof TFolder);
+  }
+
+  getItemText(folder: TFolder): string {
+    return folder.path === '' ? '/ (vault root)' : folder.path;
+  }
+
+  onChooseItem(folder: TFolder): void {
+    void (async () => {
+      for (const path of this.paths) {
+        const file = this.app.vault.getAbstractFileByPath(path);
+        if (!file) continue;
+        const target = folder.path ? `${folder.path}/${file.name}` : file.name;
+        if (this.app.vault.getAbstractFileByPath(target)) continue;
+        await this.app.fileManager.renameFile(file, target);
+      }
+    })();
+  }
+}
+
+/** Bulk actions on a multi-selection (move / delete / pin). */
+export function showBulkMenu(
+  app: App,
+  paths: string[],
+  event: MouseEvent,
+  onPin: (paths: string[]) => void,
+): void {
+  const menu = new Menu();
+  menu.addItem((i) =>
+    i
+      .setTitle(`Move ${paths.length} items…`)
+      .setIcon('folder-tree')
+      .onClick(() => new BulkMoveModal(app, paths).open()),
+  );
+  menu.addItem((i) =>
+    i
+      .setTitle(`Delete ${paths.length} items`)
+      .setIcon('trash')
+      .onClick(() =>
+        void (async () => {
+          for (const path of paths) {
+            const file = app.vault.getAbstractFileByPath(path);
+            if (file) await app.fileManager.trashFile(file);
+          }
+        })(),
+      ),
+  );
+  menu.addItem((i) =>
+    i
+      .setTitle(`Pin ${paths.length} items`)
+      .setIcon('pin')
+      .onClick(() => onPin(paths)),
+  );
+  menu.showAtMouseEvent(event);
+}
+
 /** A collision-free path like `dir/Base`, `dir/Base 1`, `dir/Base 2`. */
 function uniquePath(app: App, dir: string, base: string, ext?: string): string {
   const suffix = ext ? `.${ext}` : '';

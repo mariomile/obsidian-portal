@@ -80,6 +80,22 @@ export class PinnedSection {
     await this.ctx.saveSettings();
     this.render();
   }
+
+  /** Add many paths to the pins at once (skips already-pinned). */
+  async pinAll(paths: string[]): Promise<void> {
+    const pinned = this.ctx.settings.pinned;
+    let changed = false;
+    for (const path of paths) {
+      if (!pinned.includes(path)) {
+        pinned.push(path);
+        changed = true;
+      }
+    }
+    if (changed) {
+      await this.ctx.saveSettings();
+      this.render();
+    }
+  }
 }
 
 /**
