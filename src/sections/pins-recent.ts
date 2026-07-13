@@ -1,5 +1,6 @@
 import { TFile, TFolder, setIcon } from 'obsidian';
 import type { PortalContext } from '../types';
+import { fileIcon } from './file-icon.ts';
 
 const RECENT_LIMIT = 15;
 
@@ -31,7 +32,14 @@ export class PinnedSection {
       row.dataset.path = path;
       row.createSpan({ cls: 'portal-twisty portal-twisty-empty' });
       const icon = row.createSpan({ cls: 'portal-row-icon' });
-      setIcon(icon, file instanceof TFolder ? 'folder' : 'file-text');
+      setIcon(
+        icon,
+        file instanceof TFolder
+          ? 'folder'
+          : file instanceof TFile
+            ? fileIcon(file.extension)
+            : 'file',
+      );
 
       if (file instanceof TFile) {
         const label = file.extension === 'md' ? file.basename : file.name;
@@ -99,7 +107,7 @@ export class RecentSection {
       row.dataset.path = path;
       row.createSpan({ cls: 'portal-twisty portal-twisty-empty' });
       const icon = row.createSpan({ cls: 'portal-row-icon' });
-      setIcon(icon, 'file-text');
+      setIcon(icon, fileIcon(file.extension));
       const label = file.extension === 'md' ? file.basename : file.name;
       row.createSpan({ cls: 'portal-label', text: label });
       row.addEventListener('click', () => {

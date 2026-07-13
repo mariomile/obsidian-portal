@@ -1,6 +1,7 @@
 import { TFile, TFolder, setIcon } from 'obsidian';
 import type { PortalContext } from '../types';
 import { ancestorFolderPaths, compareEntries } from './folder-tree.ts';
+import { fileIcon } from './file-icon.ts';
 import { makeDraggable, makeDropTarget } from '../nav/dnd';
 
 /**
@@ -68,7 +69,7 @@ export class FoldersSection {
     // Files have no twisty — an empty spacer keeps labels aligned with folders.
     row.createSpan({ cls: 'portal-twisty portal-twisty-empty' });
     const icon = row.createSpan({ cls: 'portal-row-icon' });
-    setIcon(icon, file.extension === 'md' ? 'file-text' : 'file');
+    setIcon(icon, fileIcon(file.extension));
     const label = file.extension === 'md' ? file.basename : file.name;
     row.createSpan({ cls: 'portal-label', text: label });
     row.addEventListener('click', () => {
