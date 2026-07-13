@@ -51,7 +51,7 @@ function uniquePath(app: App, dir: string, base: string, ext?: string): string {
   return candidate;
 }
 
-async function createNote(app: App, parent: TFolder | null): Promise<void> {
+export async function createNote(app: App, parent: TFolder | null): Promise<void> {
   const path = uniquePath(app, parent?.path ?? '', 'Untitled', 'md');
   const file = await app.vault.create(path, '');
   await app.workspace.getLeaf(false).openFile(file);

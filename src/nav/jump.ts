@@ -12,12 +12,18 @@ const FALLBACK_LIMIT = 20;
 export class JumpInput {
   private readonly ctx: PortalContext;
   private readonly containerEl: HTMLElement;
+  private readonly onReveal: (path: string) => void;
   private inputEl: HTMLInputElement | null = null;
   private resultsEl: HTMLElement | null = null;
 
-  constructor(ctx: PortalContext, containerEl: HTMLElement) {
+  constructor(
+    ctx: PortalContext,
+    containerEl: HTMLElement,
+    onReveal: (path: string) => void,
+  ) {
     this.ctx = ctx;
     this.containerEl = containerEl;
+    this.onReveal = onReveal;
   }
 
   mount(): void {
@@ -57,9 +63,14 @@ export class JumpInput {
       : this.fallback(query);
 
     for (const hit of hits) {
-      const row = results.createDiv({ cls: 'portal-jump-hit portal-tree-row' });
+      const row = results.createDiv({ cls: 'portal-jump-hit' });
       row.dataset.path = hit.path;
-      row.createSpan({ cls: 'portal-label', text: hit.basename });
+      row.createDiv({ cls: 'portal-jump-title', text: hit.basename });
+      // Show WHERE the file lives so the result is unambiguous.
+      const parent = hit.path.includes('/')
+        ? hit.path.slice(0, hit.path.lastIndexOf('/'))
+        : '';
+      row.createDiv({ cls: 'portal-jump-path', text: parent || 'vault root' });
       row.addEventListener('click', () => this.open(hit.path));
     }
   }
@@ -84,6 +95,8 @@ export class JumpInput {
     const file = this.ctx.app.vault.getAbstractFileByPath(path);
     if (file instanceof TFile) {
       void this.ctx.app.workspace.getLeaf(false).openFile(file);
+      // Highlight where the file lives in the Folders tree.
+      this.onReveal(path);
       this.reset();
     }
   }

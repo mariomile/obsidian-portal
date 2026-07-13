@@ -6,7 +6,8 @@ import { TagsSection } from './sections/tags';
 import { CollectionsSection } from './sections/collections';
 import { PinnedSection, RecentSection } from './sections/pins-recent';
 import { JumpInput } from './nav/jump';
-import { showFileMenu, type MenuActions } from './nav/context-menu';
+import { showFileMenu, createNote, type MenuActions } from './nav/context-menu';
+import { mountToolbar, type ToolbarActions } from './nav/toolbar';
 import { startInlineRename } from './nav/rename';
 import type { TAbstractFile } from 'obsidian';
 
@@ -49,8 +50,9 @@ export class PortalView extends ItemView {
     this.contentEl.empty();
     this.contentEl.addClass('portal-rail');
 
-    // Jump box sits above every section (U7).
-    new JumpInput(this.ctx, this.contentEl).mount();
+    // Jump box + toolbar sit above every section (U7 / tools).
+    new JumpInput(this.ctx, this.contentEl, (path) => this.revealInTree(path)).mount();
+    mountToolbar(this.contentEl, this.toolbarActions());
 
     // Delegated context menu (U8): any row carrying a data-path opens the menu.
     this.registerDomEvent(this.contentEl, 'contextmenu', (event: MouseEvent) => {
@@ -114,12 +116,12 @@ export class PortalView extends ItemView {
 
       this.registerEvent(
         this.app.workspace.on('file-open', (file) => {
-          if (file instanceof TFile) this.folders?.reveal(file);
+          if (file instanceof TFile) this.revealInTree(file.path);
         }),
       );
 
       const active = this.app.workspace.getActiveFile();
-      if (active) this.folders.reveal(active);
+      if (active) this.revealInTree(active.path);
     }
 
     const tagsBody = bodies.get('tags');
@@ -179,6 +181,47 @@ export class PortalView extends ItemView {
         startInlineRename(this.app, rowEl, file, () => this.folders?.render());
       },
     };
+  }
+
+  private toolbarActions(): ToolbarActions {
+    return {
+      revealActive: () => {
+        const active = this.app.workspace.getActiveFile();
+        if (active) this.revealInTree(active.path);
+      },
+      newNote: () => {
+        const active = this.app.workspace.getActiveFile();
+        const parent = active?.parent ?? this.app.vault.getRoot();
+        void createNote(this.app, parent);
+      },
+      collapseAll: () => void this.folders?.collapseAll(),
+      expandAll: () => void this.folders?.expandAll(),
+    };
+  }
+
+  /** Expand the Folders tree down to `path` and highlight its row (used by
+   *  jump, file-open, and "reveal active"). Un-collapses the Folders section
+   *  first so the highlighted row is actually visible. */
+  private revealInTree(path: string): void {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof TFile)) return;
+    this.expandSection('folders');
+    this.folders?.reveal(file);
+  }
+
+  /** Ensure a rail section is expanded (persist the change). */
+  private expandSection(key: string): void {
+    const section = this.contentEl.querySelector(`[data-section="${key}"]`);
+    if (!(section instanceof HTMLElement) || !section.hasClass('is-collapsed')) return;
+    section.removeClass('is-collapsed');
+    const header = section.querySelector('.portal-section-header');
+    if (header instanceof HTMLElement) header.setAttribute('aria-expanded', 'true');
+    const list = this.ctx.settings.collapsedSections;
+    const i = list.indexOf(key);
+    if (i >= 0) {
+      list.splice(i, 1);
+      void this.ctx.saveSettings();
+    }
   }
 
   async onClose(): Promise<void> {

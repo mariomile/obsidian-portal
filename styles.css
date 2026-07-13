@@ -245,7 +245,45 @@
 .portal-jump-results {
   margin-top: 4px;
 }
-.portal-jump-hit .portal-label {
+/* Jump results: title + the file's location so it's unambiguous WHERE it is. */
+.portal-jump-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: var(--cursor, pointer);
+  transition: background-color var(--portal-motion);
+}
+.portal-jump-hit:hover {
+  background-color: var(--portal-wash);
+}
+.portal-jump-title {
+  font-size: var(--font-ui-small, 0.85rem);
+  color: var(--text-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.portal-jump-path {
+  font-size: var(--font-ui-smaller, 0.75rem);
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- rail toolbar (reveal / new / collapse-all / expand-all) -------------- */
+.portal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 var(--size-4-2, 8px) var(--size-4-2, 8px);
+}
+.portal-tool {
+  color: var(--text-muted);
+}
+.portal-tool:hover {
   color: var(--text-normal);
 }
 

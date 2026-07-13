@@ -91,6 +91,31 @@ export class FoldersSection {
     this.render();
   }
 
+  private collectFolderPaths(folder: TFolder, out: string[]): void {
+    for (const child of folder.children) {
+      if (child instanceof TFolder) {
+        out.push(child.path);
+        this.collectFolderPaths(child, out);
+      }
+    }
+  }
+
+  /** Expand every folder in the vault (explicit user action — renders all). */
+  async expandAll(): Promise<void> {
+    const paths: string[] = [];
+    this.collectFolderPaths(this.ctx.app.vault.getRoot(), paths);
+    this.ctx.settings.expandedFolders = paths;
+    await this.ctx.saveSettings();
+    this.render();
+  }
+
+  /** Collapse every folder — only the vault root's direct children remain. */
+  async collapseAll(): Promise<void> {
+    this.ctx.settings.expandedFolders = [];
+    await this.ctx.saveSettings();
+    this.render();
+  }
+
   /** Expand ancestors of `file`, then highlight + scroll its row into view. */
   reveal(file: TFile): void {
     const expanded = this.ctx.settings.expandedFolders;
