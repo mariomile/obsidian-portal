@@ -2,6 +2,7 @@ import { ItemView, TFile, debounce } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import type { PortalContext } from './types';
 import { FoldersSection } from './sections/folders';
+import { TagsSection } from './sections/tags';
 
 export const PORTAL_VIEW_TYPE = 'portal';
 
@@ -16,6 +17,7 @@ const SECTIONS = ['Pinned', 'Recent', 'Folders', 'Tags', 'Collections'] as const
 export class PortalView extends ItemView {
   private readonly ctx: PortalContext;
   private folders: FoldersSection | null = null;
+  private tags: TagsSection | null = null;
 
   constructor(leaf: WorkspaceLeaf, ctx: PortalContext) {
     super(leaf);
@@ -70,10 +72,20 @@ export class PortalView extends ItemView {
       const active = this.app.workspace.getActiveFile();
       if (active) this.folders.reveal(active);
     }
+
+    const tagsBody = bodies.get('tags');
+    if (tagsBody) {
+      this.tags = new TagsSection(this.ctx, tagsBody);
+      this.tags.render();
+      const rerenderTags = debounce(() => this.tags?.render(), 300, true);
+      this.registerEvent(this.app.metadataCache.on('changed', rerenderTags));
+      this.registerEvent(this.app.metadataCache.on('resolved', rerenderTags));
+    }
   }
 
   async onClose(): Promise<void> {
     this.folders = null;
+    this.tags = null;
     this.contentEl.empty();
     this.contentEl.removeClass('portal-rail');
   }

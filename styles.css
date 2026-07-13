@@ -69,4 +69,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1 1 auto;
+}
+
+/* --- U4: tag counts + empty state ---------------------------------------- */
+.portal-count {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller, 0.75rem);
+  font-variant-numeric: tabular-nums;
+}
+.portal-empty {
+  padding: 4px 12px;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller, 0.75rem);
+  font-style: italic;
 }
