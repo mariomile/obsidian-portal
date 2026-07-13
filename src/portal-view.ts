@@ -1,4 +1,4 @@
-import { ItemView, TFile, debounce } from 'obsidian';
+import { ItemView, TFile, debounce, setIcon } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import type { PortalContext } from './types';
 import { FoldersSection } from './sections/folders';
@@ -71,7 +71,32 @@ export class PortalView extends ItemView {
         cls: 'portal-section',
         attr: { 'data-section': key },
       });
-      section.createDiv({ cls: 'portal-section-header', text: name });
+      if (this.ctx.settings.collapsedSections.includes(key)) {
+        section.addClass('is-collapsed');
+      }
+
+      // The header is the collapse control: a chevron that rotates via CSS
+      // (no re-render on toggle) + the section label. Keyboard-operable so the
+      // rail is navigable without a mouse, mirroring Obsidian's nav headers.
+      const header = section.createDiv({
+        cls: 'portal-section-header',
+        attr: { role: 'button', tabindex: '0', 'aria-expanded': String(!section.hasClass('is-collapsed')) },
+      });
+      const twisty = header.createSpan({ cls: 'portal-section-twisty' });
+      setIcon(twisty, 'chevron-down');
+      header.createSpan({ cls: 'portal-section-title', text: name });
+
+      const toggle = (): void => {
+        void this.toggleSection(key, section, header);
+      };
+      header.addEventListener('click', toggle);
+      header.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggle();
+        }
+      });
+
       bodies.set(key, section.createDiv({ cls: 'portal-section-body' }));
     }
 
@@ -130,6 +155,20 @@ export class PortalView extends ItemView {
       this.recent.render();
       this.registerEvent(this.app.workspace.on('file-open', () => this.recent?.render()));
     }
+  }
+
+  /** Fold/unfold a rail section, persisting the choice so it survives reloads.
+   *  Toggles only the class + the persisted key — the body stays mounted and
+   *  live (CSS hides it), so a collapsed section's renderers keep working and
+   *  reveal it instantly on expand. */
+  private async toggleSection(key: string, section: HTMLElement, header: HTMLElement): Promise<void> {
+    const collapsed = section.classList.toggle('is-collapsed');
+    header.setAttribute('aria-expanded', String(!collapsed));
+    const list = this.ctx.settings.collapsedSections;
+    const i = list.indexOf(key);
+    if (collapsed && i < 0) list.push(key);
+    else if (!collapsed && i >= 0) list.splice(i, 1);
+    await this.ctx.saveSettings();
   }
 
   private menuActions(): MenuActions {

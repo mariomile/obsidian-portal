@@ -1,37 +1,208 @@
 /* Portal — Craft-style unified navigator.
-   Full Cosmos-tuned styling lands in U10; this is placeholder geometry. */
+   Cosmos-tuned rail: collapsible sections, native-feeling tree rows, and the
+   theme's hover/selection language (soft accent-neutral wash + weight-500
+   selection). Falls back cleanly to core variables when Cosmos is absent. */
+
+/* Local aliases so every surface shares one motion + wash vocabulary and we
+   inherit Cosmos tokens when present, sane defaults otherwise. */
+.portal-rail {
+  --portal-motion: var(--cosmos-t-fast, 120ms) var(--mv-lift, ease);
+  --portal-wash: color-mix(in srgb, var(--text-normal) 6%, transparent);
+  --portal-wash-strong: color-mix(in srgb, var(--text-normal) 9%, transparent);
+  --portal-indent: 16px;
+}
 
 /* --- U2: hide the native file explorer when Portal governs navigation ------
    CSS-hide (not detach) keeps the core file-explorer plugin ALIVE, so
-   reveal-in-folder and any third-party plugin depending on it keep working.
-   The `portal-hidden-leaf` class is applied in JS to the explorer's
-   `.workspace-leaf` (the view type isn't a reliable DOM attribute). */
+   reveal-in-folder and any third-party plugin depending on it keep working. */
 .workspace-leaf.portal-hidden-leaf {
   display: none;
 }
 
-/* --- U2: rail shell (placeholder geometry) --------------------------------- */
+/* --- rail shell ------------------------------------------------------------ */
 .portal-rail {
-  padding: var(--size-4-2, 8px) 0;
+  padding: var(--size-4-2, 8px) var(--size-4-1, 4px);
 }
+
 .portal-section {
-  padding: 0 var(--size-4-3, 12px) var(--size-4-2, 8px);
+  margin-bottom: var(--size-4-1, 4px);
 }
+
+/* --- collapsible section header -------------------------------------------- */
 .portal-section-header {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: var(--size-4-1, 4px) var(--size-4-2, 8px);
+  border-radius: var(--radius-s, 4px);
+  cursor: var(--cursor, pointer);
+  user-select: none;
+  transition: background-color var(--portal-motion), color var(--portal-motion);
+}
+.portal-section-header:hover {
+  background-color: var(--portal-wash);
+}
+.portal-section-header:focus-visible {
+  outline: 2px solid var(--background-modifier-border-focus, var(--interactive-accent));
+  outline-offset: -2px;
+}
+
+.portal-section-twisty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+  /* Chevron points down when expanded; rotates to point right when collapsed.
+     Rotating in CSS avoids re-issuing setIcon on every toggle. */
+  transition: transform var(--portal-motion), color var(--portal-motion);
+}
+.portal-section-twisty svg {
+  width: 14px;
+  height: 14px;
+}
+.portal-section.is-collapsed .portal-section-twisty {
+  transform: rotate(-90deg);
+}
+.portal-section-header:hover .portal-section-twisty {
+  color: var(--text-muted);
+}
+
+.portal-section-title {
   font-size: var(--font-ui-smaller, 0.75rem);
+  font-weight: var(--font-medium, 500);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-faint);
-  padding: var(--size-4-1, 4px) 0;
+  transition: color var(--portal-motion);
 }
-/* Empty sections read as intentionally-unbuilt (dash) rather than broken. */
-.portal-section-body:empty::after {
-  content: '—';
-  color: var(--text-faint);
-  opacity: 0.5;
+.portal-section-header:hover .portal-section-title {
+  color: var(--text-muted);
 }
 
-/* --- U8: inline rename input --------------------------------------------- */
+/* Collapsed → body is hidden but stays mounted (renderers keep running). */
+.portal-section.is-collapsed .portal-section-body {
+  display: none;
+}
+
+.portal-section-body {
+  padding-block: 2px;
+}
+/* Empty (built-but-no-content) sections read as intentional, not broken. */
+.portal-section-body:empty::after {
+  content: '—';
+  display: block;
+  padding: 2px var(--size-4-2, 8px);
+  color: var(--text-faint);
+  opacity: 0.4;
+}
+
+/* --- tree rows (folders, files, tags, pins, recents, collections) --------- */
+.portal-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  padding-inline-start: calc(6px + var(--portal-depth, 0) * var(--portal-indent));
+  border-radius: var(--radius-s, 4px);
+  cursor: var(--cursor, pointer);
+  color: var(--text-normal);
+  font-size: var(--font-ui-small, 0.8rem);
+  line-height: 1.4;
+  transition: background-color var(--portal-motion), color var(--portal-motion);
+}
+.portal-tree-row:hover {
+  background-color: var(--portal-wash);
+}
+/* Selection marked by WEIGHT + accent (macOS/Craft/Cosmos convention), on a
+   soft wash rather than the flat hover fill so active ≠ merely hovered. */
+.portal-file.is-active {
+  background-color: var(--portal-wash-strong);
+  color: var(--text-accent);
+  font-weight: var(--font-medium, 500);
+}
+
+/* --- twisties (folder / tag tree) ----------------------------------------- */
+.portal-twisty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+  transition: color var(--portal-motion);
+}
+.portal-twisty svg {
+  width: 13px;
+  height: 13px;
+}
+.portal-tree-row:hover .portal-twisty {
+  color: var(--text-muted);
+}
+/* File rows have no twisty — the empty spacer keeps labels aligned. */
+.portal-twisty-empty {
+  visibility: hidden;
+}
+
+.portal-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+}
+
+/* --- counts + empty states ------------------------------------------------- */
+.portal-count {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller, 0.75rem);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+.portal-empty {
+  padding: 3px var(--size-4-2, 8px);
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller, 0.75rem);
+  font-style: italic;
+}
+
+/* --- pinned rows (inline unpin on hover) ---------------------------------- */
+.portal-pin-remove {
+  flex: 0 0 auto;
+  width: 16px;
+  text-align: center;
+  color: var(--text-faint);
+  opacity: 0;
+  cursor: var(--cursor, pointer);
+  transition: opacity var(--portal-motion), color var(--portal-motion);
+}
+.portal-pin:hover .portal-pin-remove {
+  opacity: 1;
+}
+.portal-pin-remove:hover {
+  color: var(--text-normal);
+}
+.portal-pin.is-stale .portal-label {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+/* --- collection rows ------------------------------------------------------- */
+.portal-collection-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+/* --- inline rename input --------------------------------------------------- */
 .portal-rename-input {
   flex: 1 1 auto;
   min-width: 0;
@@ -39,7 +210,7 @@
   padding: 0 4px;
 }
 
-/* --- U7: jump box --------------------------------------------------------- */
+/* --- jump box -------------------------------------------------------------- */
 .portal-jump {
   padding: 0 var(--size-4-2, 8px) var(--size-4-2, 8px);
 }
@@ -54,89 +225,16 @@
   color: var(--text-normal);
 }
 
-/* --- U3: folder/file tree ------------------------------------------------- */
-.portal-tree-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 6px;
-  padding-inline-start: calc(6px + var(--portal-depth, 0) * 14px);
+/* --- drag-and-drop move target (U9) --------------------------------------- */
+.portal-drop-target {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+  background-color: var(--portal-wash);
   border-radius: var(--radius-s, 4px);
-  cursor: var(--cursor, pointer);
-  color: var(--text-normal);
-  font-size: var(--font-ui-small, 0.8rem);
-  line-height: 1.4;
-}
-.portal-tree-row:hover {
-  background: var(--background-modifier-hover);
-}
-.portal-file.is-active {
-  background: var(--background-modifier-hover);
-  color: var(--text-accent);
-  font-weight: 500;
-}
-.portal-twisty {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  color: var(--text-faint);
-}
-.portal-twisty svg {
-  width: 14px;
-  height: 14px;
-}
-.portal-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1 1 auto;
 }
 
-/* --- U4: tag counts + empty state ---------------------------------------- */
-.portal-count {
-  flex: 0 0 auto;
-  color: var(--text-faint);
-  font-size: var(--font-ui-smaller, 0.75rem);
-  font-variant-numeric: tabular-nums;
-}
-.portal-empty {
-  padding: 4px 12px;
-  color: var(--text-faint);
-  font-size: var(--font-ui-smaller, 0.75rem);
-  font-style: italic;
-}
-
-/* --- U6: pinned rows (inline unpin on hover) ------------------------------ */
-.portal-pin-remove {
-  flex: 0 0 auto;
-  width: 16px;
-  text-align: center;
-  color: var(--text-faint);
-  opacity: 0;
-  cursor: var(--cursor, pointer);
-}
-.portal-pin:hover .portal-pin-remove {
-  opacity: 1;
-}
-.portal-pin-remove:hover {
-  color: var(--text-normal);
-}
-.portal-pin.is-stale .portal-label {
-  color: var(--text-faint);
-  text-decoration: line-through;
-}
-
-/* --- U5: collection rows -------------------------------------------------- */
-.portal-collection-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  font-size: 0.9em;
-  line-height: 1;
+/* --- one-thumb: bigger touch targets on phone ----------------------------- */
+body.is-phone .portal-section-header,
+body.is-phone .portal-tree-row {
+  min-height: var(--cosmos-touch-min, 40px);
 }

@@ -13,12 +13,17 @@ export interface PortalSettings {
   expandedFolders: string[];
   /** User-curated pinned file/folder paths (U6). */
   pinned: string[];
+  /** Rail section keys (lower-cased, e.g. 'tags') that are collapsed. Default
+   *  empty → every section starts expanded, so a fresh install never hides a
+   *  user's content; a section is added here only when the user folds it. */
+  collapsedSections: string[];
 }
 
 export const DEFAULT_SETTINGS: PortalSettings = {
   hideNativeExplorer: true,
   expandedFolders: [],
   pinned: [],
+  collapsedSections: [],
 };
 
 const asStringArray = (value: unknown, fallback: string[]): string[] =>
@@ -36,6 +41,7 @@ export function parseSettings(raw: unknown): PortalSettings {
         : DEFAULT_SETTINGS.hideNativeExplorer,
     expandedFolders: asStringArray(data.expandedFolders, DEFAULT_SETTINGS.expandedFolders),
     pinned: asStringArray(data.pinned, DEFAULT_SETTINGS.pinned),
+    collapsedSections: asStringArray(data.collapsedSections, DEFAULT_SETTINGS.collapsedSections),
   };
 }
 
