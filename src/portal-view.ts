@@ -40,6 +40,7 @@ export class PortalView extends ItemView {
   private pinned: PinnedSection | null = null;
   private recent: RecentSection | null = null;
   private bookmarks: BookmarksSection | null = null;
+  private breadcrumbEl: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, ctx: PortalContext) {
     super(leaf);
@@ -72,6 +73,13 @@ export class PortalView extends ItemView {
     ).mount();
     mountToolbar(this.contentEl, this.toolbarActions());
 
+    // Breadcrumb of the active file's folder path (click a crumb → expand it).
+    this.breadcrumbEl = this.contentEl.createDiv({ cls: 'portal-breadcrumb' });
+    this.updateBreadcrumb(this.app.workspace.getActiveFile());
+    this.registerEvent(
+      this.app.workspace.on('file-open', (file) => this.updateBreadcrumb(file)),
+    );
+
     // Delegated context menu (U8): any row carrying a data-path opens the menu.
     this.registerDomEvent(this.contentEl, 'contextmenu', (event: MouseEvent) => {
       const target = event.target;
@@ -82,6 +90,21 @@ export class PortalView extends ItemView {
       if (!file) return;
       event.preventDefault();
       showFileMenu(this.app, file, event, row, this.menuActions());
+    });
+
+    // Native page preview on hover (core "Page preview" plugin listens).
+    this.registerDomEvent(this.contentEl, 'mouseover', (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const row = target.closest('[data-path]');
+      if (!(row instanceof HTMLElement) || !row.dataset.path) return;
+      this.app.workspace.trigger('hover-link', {
+        event,
+        source: 'portal',
+        hoverParent: this,
+        targetEl: row,
+        linktext: row.dataset.path,
+      });
     });
 
     const bodies = new Map<string, HTMLElement>();
@@ -234,6 +257,23 @@ export class PortalView extends ItemView {
     };
   }
 
+  private updateBreadcrumb(file: TFile | null): void {
+    const bar = this.breadcrumbEl;
+    if (!bar) return;
+    bar.empty();
+    if (!file) return;
+    const segments = file.path.split('/');
+    segments.pop(); // drop the filename
+    let acc = '';
+    segments.forEach((segment, i) => {
+      if (i > 0) bar.createSpan({ cls: 'portal-crumb-sep', text: '/' });
+      acc = acc ? `${acc}/${segment}` : segment;
+      const path = acc;
+      const crumb = bar.createSpan({ cls: 'portal-crumb', text: segment });
+      crumb.addEventListener('click', () => this.folders?.expandTo(path));
+    });
+  }
+
   private showSortMenu(event: MouseEvent): void {
     const options: { value: SortMode; label: string }[] = [
       { value: 'name', label: 'Name' },
@@ -288,6 +328,7 @@ export class PortalView extends ItemView {
     this.pinned = null;
     this.recent = null;
     this.bookmarks = null;
+    this.breadcrumbEl = null;
     this.contentEl.empty();
     this.contentEl.removeClass('portal-rail');
   }

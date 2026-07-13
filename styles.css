@@ -304,6 +304,33 @@
   white-space: nowrap;
 }
 
+/* --- breadcrumb of the active file's folder path -------------------------- */
+.portal-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 0 var(--size-4-2, 8px) var(--size-4-2, 8px);
+  font-size: var(--font-ui-smaller, 0.75rem);
+  color: var(--text-faint);
+}
+.portal-breadcrumb:empty {
+  display: none;
+}
+.portal-crumb {
+  cursor: var(--cursor, pointer);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.portal-crumb:hover {
+  color: var(--text-normal);
+  background-color: var(--portal-wash);
+}
+.portal-crumb-sep {
+  color: var(--text-faint);
+  opacity: 0.6;
+}
+
 /* --- rail toolbar (reveal / new / collapse-all / expand-all) -------------- */
 .portal-toolbar {
   display: flex;

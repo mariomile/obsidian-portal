@@ -292,6 +292,25 @@ export class FoldersSection {
     this.render();
   }
 
+  /** Expand the tree down to `folderPath` and scroll its row into view. */
+  expandTo(folderPath: string): void {
+    const expanded = this.ctx.settings.expandedFolders;
+    let changed = false;
+    for (const p of ancestorFolderPaths(`${folderPath}/x`)) {
+      if (p && !expanded.includes(p)) {
+        expanded.push(p);
+        changed = true;
+      }
+    }
+    if (changed) void this.ctx.saveSettings();
+    this.cursorPath = folderPath;
+    this.render();
+    const row = this.containerEl.querySelector(
+      `.portal-folder[data-path="${CSS.escape(folderPath)}"]`,
+    );
+    if (row instanceof HTMLElement) row.scrollIntoView({ block: 'nearest' });
+  }
+
   /** Expand ancestors of `file`, then highlight + scroll its row into view. */
   reveal(file: TFile): void {
     this.cursorPath = file.path;
