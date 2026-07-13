@@ -40,3 +40,30 @@ export function openGlobalSearch(app: App, query: string): boolean {
   }
   return false;
 }
+
+interface PluginsRegistry {
+  plugins?: Record<string, unknown>;
+}
+interface AppWithPlugins {
+  plugins?: PluginsRegistry;
+}
+interface CommandsApi {
+  executeCommandById(id: string): boolean;
+}
+interface AppWithCommands {
+  commands?: CommandsApi;
+}
+
+/** Another plugin's instance by id (null when absent). Resolve after layout. */
+export function getPlugin<T = unknown>(app: App, id: string): T | null {
+  const registry = (app as unknown as AppWithPlugins).plugins?.plugins;
+  return (registry?.[id] ?? null) as T | null;
+}
+
+/** Cross-plugin command invocation — the suite's sanctioned pattern. */
+export function executeCommand(app: App, id: string): boolean {
+  const commands = (app as unknown as AppWithCommands).commands;
+  return typeof commands?.executeCommandById === 'function'
+    ? commands.executeCommandById(id)
+    : false;
+}

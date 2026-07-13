@@ -3,6 +3,7 @@ import type { WorkspaceLeaf } from 'obsidian';
 import type { PortalContext } from './types';
 import { FoldersSection } from './sections/folders';
 import { TagsSection } from './sections/tags';
+import { CollectionsSection } from './sections/collections';
 
 export const PORTAL_VIEW_TYPE = 'portal';
 
@@ -18,6 +19,7 @@ export class PortalView extends ItemView {
   private readonly ctx: PortalContext;
   private folders: FoldersSection | null = null;
   private tags: TagsSection | null = null;
+  private collections: CollectionsSection | null = null;
 
   constructor(leaf: WorkspaceLeaf, ctx: PortalContext) {
     super(leaf);
@@ -74,18 +76,32 @@ export class PortalView extends ItemView {
     }
 
     const tagsBody = bodies.get('tags');
+    const collectionsBody = bodies.get('collections');
     if (tagsBody) {
       this.tags = new TagsSection(this.ctx, tagsBody);
       this.tags.render();
-      const rerenderTags = debounce(() => this.tags?.render(), 300, true);
-      this.registerEvent(this.app.metadataCache.on('changed', rerenderTags));
-      this.registerEvent(this.app.metadataCache.on('resolved', rerenderTags));
+    }
+    if (collectionsBody) {
+      this.collections = new CollectionsSection(this.ctx, collectionsBody);
+      this.collections.render();
+    }
+    // Tags and collections both derive from metadata; re-render together,
+    // debounced, on metadata changes (superbasetags rebuilds its registry
+    // on the same signals).
+    if (tagsBody || collectionsBody) {
+      const rerenderMeta = debounce(() => {
+        this.tags?.render();
+        this.collections?.render();
+      }, 300, true);
+      this.registerEvent(this.app.metadataCache.on('changed', rerenderMeta));
+      this.registerEvent(this.app.metadataCache.on('resolved', rerenderMeta));
     }
   }
 
   async onClose(): Promise<void> {
     this.folders = null;
     this.tags = null;
+    this.collections = null;
     this.contentEl.empty();
     this.contentEl.removeClass('portal-rail');
   }
