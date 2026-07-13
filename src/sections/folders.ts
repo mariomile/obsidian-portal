@@ -1,8 +1,14 @@
 import { TFile, TFolder, setIcon } from 'obsidian';
+import type { TAbstractFile } from 'obsidian';
 import type { PortalContext } from '../types';
-import { ancestorFolderPaths, compareEntries } from './folder-tree.ts';
+import { ancestorFolderPaths } from './folder-tree.ts';
 import { fileIcon } from './file-icon.ts';
 import { makeDraggable, makeDropTarget } from '../nav/dnd';
+
+interface Decor {
+  icon?: string;
+  color?: string;
+}
 
 /**
  * Folders section (U3): the vault folder hierarchy as a collapsible tree.
@@ -26,16 +32,45 @@ export class FoldersSection {
   }
 
   private renderChildren(folder: TFolder, parentEl: HTMLElement, depth: number): void {
-    const sorted = [...folder.children].sort((a, b) =>
-      compareEntries(
-        { name: a.name, isFolder: a instanceof TFolder },
-        { name: b.name, isFolder: b instanceof TFolder },
-      ),
-    );
+    const sorted = [...folder.children].sort((a, b) => this.compareChildren(a, b));
     for (const child of sorted) {
       if (child instanceof TFolder) this.renderFolder(child, parentEl, depth);
       else if (child instanceof TFile) this.renderFile(child, parentEl, depth);
     }
+  }
+
+  /** Folders first (by name); files by the chosen sort mode. */
+  private compareChildren(a: TAbstractFile, b: TAbstractFile): number {
+    const aFolder = a instanceof TFolder;
+    const bFolder = b instanceof TFolder;
+    if (aFolder !== bFolder) return aFolder ? -1 : 1;
+    const mode = this.ctx.settings.sortBy;
+    if (!aFolder && a instanceof TFile && b instanceof TFile) {
+      if (mode === 'modified') return b.stat.mtime - a.stat.mtime;
+      if (mode === 'created') return b.stat.ctime - a.stat.ctime;
+    }
+    return a.name.localeCompare(b.name, undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  }
+
+  /** Icon/colour overrides from frontmatter (folders read a same-named folder
+   *  note, e.g. `Active/Active.md`) — the Craft "custom folder icon" story. */
+  private decorFor(file: TAbstractFile): Decor {
+    let frontmatter: Record<string, unknown> | undefined;
+    if (file instanceof TFile) {
+      frontmatter = this.ctx.app.metadataCache.getFileCache(file)?.frontmatter;
+    } else if (file instanceof TFolder) {
+      const note = this.ctx.app.vault.getAbstractFileByPath(`${file.path}/${file.name}.md`);
+      if (note instanceof TFile) {
+        frontmatter = this.ctx.app.metadataCache.getFileCache(note)?.frontmatter;
+      }
+    }
+    return {
+      icon: typeof frontmatter?.icon === 'string' ? frontmatter.icon : undefined,
+      color: typeof frontmatter?.color === 'string' ? frontmatter.color : undefined,
+    };
   }
 
   private renderFolder(folder: TFolder, parentEl: HTMLElement, depth: number): void {
@@ -45,8 +80,10 @@ export class FoldersSection {
     row.dataset.path = folder.path;
     const twisty = row.createSpan({ cls: 'portal-twisty' });
     setIcon(twisty, expanded ? 'chevron-down' : 'chevron-right');
+    const decor = this.decorFor(folder);
     const icon = row.createSpan({ cls: 'portal-row-icon' });
-    setIcon(icon, expanded ? 'folder-open' : 'folder');
+    setIcon(icon, decor.icon ?? (expanded ? 'folder-open' : 'folder'));
+    if (decor.color) icon.style.color = decor.color;
     row.createSpan({ cls: 'portal-label', text: folder.name });
     row.addEventListener('click', () => {
       void this.toggleFolder(folder.path);
@@ -68,8 +105,10 @@ export class FoldersSection {
     row.dataset.path = file.path;
     // Files have no twisty — an empty spacer keeps labels aligned with folders.
     row.createSpan({ cls: 'portal-twisty portal-twisty-empty' });
+    const decor = this.decorFor(file);
     const icon = row.createSpan({ cls: 'portal-row-icon' });
-    setIcon(icon, fileIcon(file.extension));
+    setIcon(icon, decor.icon ?? fileIcon(file.extension));
+    if (decor.color) icon.style.color = decor.color;
     const label = file.extension === 'md' ? file.basename : file.name;
     row.createSpan({ cls: 'portal-label', text: label });
     row.addEventListener('click', () => {

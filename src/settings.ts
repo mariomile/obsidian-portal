@@ -2,7 +2,11 @@ import { PluginSettingTab, Setting } from 'obsidian';
 import type { App } from 'obsidian';
 import type PortalPlugin from './main';
 
+export type SortMode = 'name' | 'modified' | 'created';
+
 export interface PortalSettings {
+  /** Folder-tree file ordering (folders always sort by name, first). */
+  sortBy: SortMode;
   /** When true, the native file-explorer leaf is CSS-hidden so Portal is the
    *  primary navigation surface. Reversible — turning this off restores the
    *  native explorer instantly (the core plugin is never detached). */
@@ -22,6 +26,7 @@ export interface PortalSettings {
 }
 
 export const DEFAULT_SETTINGS: PortalSettings = {
+  sortBy: 'name',
   hideNativeExplorer: true,
   expandedFolders: [],
   pinned: [],
@@ -37,7 +42,10 @@ const asStringArray = (value: unknown, fallback: string[]): string[] =>
 /** Defensive parse of persisted data — every field falls back to its default. */
 export function parseSettings(raw: unknown): PortalSettings {
   const data = (raw ?? {}) as Partial<PortalSettings>;
+  const sortBy: SortMode =
+    data.sortBy === 'modified' || data.sortBy === 'created' ? data.sortBy : 'name';
   return {
+    sortBy,
     hideNativeExplorer:
       typeof data.hideNativeExplorer === 'boolean'
         ? data.hideNativeExplorer

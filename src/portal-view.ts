@@ -1,5 +1,6 @@
-import { ItemView, TFile, debounce, setIcon } from 'obsidian';
+import { ItemView, Menu, TFile, debounce, setIcon } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
+import type { SortMode } from './settings';
 import type { PortalContext } from './types';
 import { FoldersSection } from './sections/folders';
 import { TagsSection } from './sections/tags';
@@ -198,7 +199,30 @@ export class PortalView extends ItemView {
       },
       collapseAll: () => void this.folders?.collapseAll(),
       expandAll: () => void this.folders?.expandAll(),
+      changeSort: (event) => this.showSortMenu(event),
     };
+  }
+
+  private showSortMenu(event: MouseEvent): void {
+    const options: { value: SortMode; label: string }[] = [
+      { value: 'name', label: 'Name' },
+      { value: 'modified', label: 'Modified time' },
+      { value: 'created', label: 'Created time' },
+    ];
+    const menu = new Menu();
+    for (const option of options) {
+      menu.addItem((item) =>
+        item
+          .setTitle(option.label)
+          .setChecked(this.ctx.settings.sortBy === option.value)
+          .onClick(async () => {
+            this.ctx.settings.sortBy = option.value;
+            await this.ctx.saveSettings();
+            this.folders?.render();
+          }),
+      );
+    }
+    menu.showAtMouseEvent(event);
   }
 
   /** Expand the Folders tree down to `path` and highlight its row (used by
