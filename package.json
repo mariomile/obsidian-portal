@@ -10,7 +10,7 @@
     "build": "pnpm typecheck && node esbuild.config.mjs production",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "node --experimental-strip-types --test src/*.test.ts"
+    "test": "node --experimental-strip-types --test \"src/**/*.test.ts\""
   },
   "keywords": [
     "obsidian",

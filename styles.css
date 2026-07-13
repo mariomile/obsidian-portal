@@ -30,3 +30,43 @@
   color: var(--text-faint);
   opacity: 0.5;
 }
+
+/* --- U3: folder/file tree ------------------------------------------------- */
+.portal-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  padding-inline-start: calc(6px + var(--portal-depth, 0) * 14px);
+  border-radius: var(--radius-s, 4px);
+  cursor: var(--cursor, pointer);
+  color: var(--text-normal);
+  font-size: var(--font-ui-small, 0.8rem);
+  line-height: 1.4;
+}
+.portal-tree-row:hover {
+  background: var(--background-modifier-hover);
+}
+.portal-file.is-active {
+  background: var(--background-modifier-hover);
+  color: var(--text-accent);
+  font-weight: 500;
+}
+.portal-twisty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+}
+.portal-twisty svg {
+  width: 14px;
+  height: 14px;
+}
+.portal-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

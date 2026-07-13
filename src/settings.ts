@@ -7,11 +7,24 @@ export interface PortalSettings {
    *  primary navigation surface. Reversible — turning this off restores the
    *  native explorer instantly (the core plugin is never detached). */
   hideNativeExplorer: boolean;
+  /** Folder paths whose Folders-tree node is expanded (persisted). Default
+   *  empty → only the vault root's direct children render (lazy, like the
+   *  native explorer); children mount only when their folder is expanded. */
+  expandedFolders: string[];
+  /** User-curated pinned file/folder paths (U6). */
+  pinned: string[];
 }
 
 export const DEFAULT_SETTINGS: PortalSettings = {
   hideNativeExplorer: true,
+  expandedFolders: [],
+  pinned: [],
 };
+
+const asStringArray = (value: unknown, fallback: string[]): string[] =>
+  Array.isArray(value) && value.every((v) => typeof v === 'string')
+    ? (value as string[])
+    : fallback;
 
 /** Defensive parse of persisted data — every field falls back to its default. */
 export function parseSettings(raw: unknown): PortalSettings {
@@ -21,6 +34,8 @@ export function parseSettings(raw: unknown): PortalSettings {
       typeof data.hideNativeExplorer === 'boolean'
         ? data.hideNativeExplorer
         : DEFAULT_SETTINGS.hideNativeExplorer,
+    expandedFolders: asStringArray(data.expandedFolders, DEFAULT_SETTINGS.expandedFolders),
+    pinned: asStringArray(data.pinned, DEFAULT_SETTINGS.pinned),
   };
 }
 

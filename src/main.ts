@@ -29,7 +29,7 @@ export default class PortalPlugin extends Plugin {
 
     this.registerView(
       PORTAL_VIEW_TYPE,
-      (leaf: WorkspaceLeaf) => new PortalView(leaf),
+      (leaf: WorkspaceLeaf) => new PortalView(leaf, this),
     );
 
     this.addRibbonIcon('panel-left', 'Open Portal', () => {
