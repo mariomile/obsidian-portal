@@ -1,6 +1,7 @@
 import { TFile, TFolder, setIcon } from 'obsidian';
 import type { PortalContext } from '../types';
 import { ancestorFolderPaths, compareEntries } from './folder-tree.ts';
+import { makeDraggable, makeDropTarget } from '../nav/dnd';
 
 /**
  * Folders section (U3): the vault folder hierarchy as a collapsible tree.
@@ -18,6 +19,8 @@ export class FoldersSection {
 
   render(): void {
     this.containerEl.empty();
+    // The whole tree accepts drops onto the vault root.
+    makeDropTarget(this.containerEl, '', this.ctx.app, () => this.render());
     this.renderChildren(this.ctx.app.vault.getRoot(), this.containerEl, 0);
   }
 
@@ -38,12 +41,15 @@ export class FoldersSection {
     const expanded = this.isExpanded(folder.path);
     const row = parentEl.createDiv({ cls: 'portal-tree-row portal-folder' });
     row.style.setProperty('--portal-depth', String(depth));
+    row.dataset.path = folder.path;
     const twisty = row.createSpan({ cls: 'portal-twisty' });
     setIcon(twisty, expanded ? 'chevron-down' : 'chevron-right');
     row.createSpan({ cls: 'portal-label', text: folder.name });
     row.addEventListener('click', () => {
       void this.toggleFolder(folder.path);
     });
+    makeDraggable(row, folder.path);
+    makeDropTarget(row, folder.path, this.ctx.app, () => this.render());
 
     // Lazy: children mount only when the folder is expanded, so a large vault
     // never renders thousands of rows at once.
@@ -64,6 +70,7 @@ export class FoldersSection {
     row.addEventListener('click', () => {
       void this.ctx.app.workspace.getLeaf(false).openFile(file);
     });
+    makeDraggable(row, file.path);
   }
 
   private isExpanded(path: string): boolean {
