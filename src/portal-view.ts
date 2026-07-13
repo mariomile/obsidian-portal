@@ -6,6 +6,9 @@ import { TagsSection } from './sections/tags';
 import { CollectionsSection } from './sections/collections';
 import { PinnedSection, RecentSection } from './sections/pins-recent';
 import { JumpInput } from './nav/jump';
+import { showFileMenu, type MenuActions } from './nav/context-menu';
+import { startInlineRename } from './nav/rename';
+import type { TAbstractFile } from 'obsidian';
 
 export const PORTAL_VIEW_TYPE = 'portal';
 
@@ -48,6 +51,18 @@ export class PortalView extends ItemView {
 
     // Jump box sits above every section (U7).
     new JumpInput(this.ctx, this.contentEl).mount();
+
+    // Delegated context menu (U8): any row carrying a data-path opens the menu.
+    this.registerDomEvent(this.contentEl, 'contextmenu', (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const row = target.closest('[data-path]');
+      if (!(row instanceof HTMLElement) || !row.dataset.path) return;
+      const file = this.app.vault.getAbstractFileByPath(row.dataset.path);
+      if (!file) return;
+      event.preventDefault();
+      showFileMenu(this.app, file, event, row, this.menuActions());
+    });
 
     const bodies = new Map<string, HTMLElement>();
     for (const name of SECTIONS) {
@@ -115,6 +130,16 @@ export class PortalView extends ItemView {
       this.recent.render();
       this.registerEvent(this.app.workspace.on('file-open', () => this.recent?.render()));
     }
+  }
+
+  private menuActions(): MenuActions {
+    return {
+      isPinned: (path) => this.pinned?.isPinned(path) ?? false,
+      togglePin: (path) => this.pinned?.toggle(path) ?? Promise.resolve(),
+      renameInline: (file: TAbstractFile, rowEl: HTMLElement) => {
+        startInlineRename(this.app, rowEl, file, () => this.folders?.render());
+      },
+    };
   }
 
   async onClose(): Promise<void> {
