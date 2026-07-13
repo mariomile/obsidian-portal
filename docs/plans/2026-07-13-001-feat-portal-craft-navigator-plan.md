@@ -61,7 +61,7 @@ Obsidian keeps folders and tags in two separate panes and leaves the native expl
 ### Deferred to Follow-Up Work
 
 - Phone/mobile slice (touch targets, drawer layout): separate slice after v1, per suite convention.
-- superbasetags cleanup PR: removing its now-dead view code once Portal's Collections is proven (its repo, separate commit).
+- ~~superbasetags cleanup PR~~ **CANCELLED (Mario 2026-07-13): superbasetags is NEVER touched.** Portal only reads it read-only. No PR against superbasetags will ever exist.
 
 ---
 
@@ -315,7 +315,7 @@ Obsidian keeps folders and tags in two separate panes and leaves the native expl
 **Approach:**
 - Read collections from `app.plugins.plugins['superbasetags'].registry.supertags` (icon · name · `membersOf(tag).length`), resolved after `onLayoutReady`, null-guarded when absent.
 - Click a collection → `registry`-instance `openBase(st)`; "type this note" → `executeCommandById('superbasetags:apply-to-current')`.
-- superbasetags side: gate its `activateView`/auto-open on absence of Portal (presence check or shared setting) so only Portal surfaces collections. Its view code stays (dead) until the follow-up cleanup PR.
+- superbasetags side: **NO CHANGE** — it is never modified (hard constraint, Mario 2026-07-13). It does not auto-open its view anyway (onLayoutReady only rebuilds), so it is already dormant; Portal simply adds a read-only Collections surface alongside it.
 
 **Patterns to follow:** memory `exo-askexo-cross-plugin-api`, `aiditor-annotation-engine` (command-execution cross-plugin convention).
 

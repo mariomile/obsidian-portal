@@ -80,9 +80,9 @@ Obsidian keeps folders and tags in two separate panes — the file explorer and 
 - R12. Inline rename is available on files/folders and commits through the native rename API so links update.
 - R13. Creating a new note or folder is available from the rail header and from folder context menus.
 
-**superbasetags absorption**
-- R14. superbasetags no longer renders its own sidebar view; its collection hub surfaces exclusively inside Portal's Collections section.
-- R15. superbasetags remains installed as the engine for typing a note (apply `#type/X` + scaffold fields); Portal invokes it rather than reimplementing it.
+**superbasetags absorption (READ-ONLY — superbasetags is NEVER modified)**
+- R14. Portal surfaces superbasetags' `#type/*` collections inside its Collections section by **reading** superbasetags' in-memory registry at runtime. superbasetags is never edited, gated, or suppressed — it stays fully functional and autonomous (its own sidebar view, commands, and typing all keep working unchanged). Portal is simply an additional read-only surface. *(Hard constraint, Mario 2026-07-13.)*
+- R15. superbasetags stays installed as the engine for typing a note (apply `#type/X` + scaffold fields); Portal invokes it via its command rather than reimplementing it.
 - R16. Typing/apply-supertag is reachable from Portal (note or collection action) and delegates to superbasetags.
 
 **Look & platform**
@@ -117,7 +117,7 @@ Obsidian keeps folders and tags in two separate panes — the file explorer and 
 - No saved-search / smart-query beyond tags and collections in v1.
 - No graph or canvas navigation.
 - No phone touch parity in v1 (dedicated later slice).
-- superbasetags is not deleted or deprecated — it is reduced to an engine.
+- superbasetags is **never modified** — Portal only reads it at runtime (see R14); it stays fully functional and autonomous.
 
 ---
 
