@@ -54,7 +54,12 @@ export class PortalView extends ItemView {
 
     // Craft-style fixed nav block, then jump + toolbar, above every section.
     mountNavBlock(this.app, this.contentEl);
-    new JumpInput(this.ctx, this.contentEl, (path) => this.revealInTree(path)).mount();
+    new JumpInput(
+      this.ctx,
+      this.contentEl,
+      (path) => this.revealInTree(path),
+      (query) => this.folders?.setFilter(query),
+    ).mount();
     mountToolbar(this.contentEl, this.toolbarActions());
 
     // Delegated context menu (U8): any row carrying a data-path opens the menu.

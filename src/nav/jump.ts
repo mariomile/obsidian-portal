@@ -13,6 +13,7 @@ export class JumpInput {
   private readonly ctx: PortalContext;
   private readonly containerEl: HTMLElement;
   private readonly onReveal: (path: string) => void;
+  private readonly onFilter: (query: string) => void;
   private inputEl: HTMLInputElement | null = null;
   private resultsEl: HTMLElement | null = null;
 
@@ -20,10 +21,12 @@ export class JumpInput {
     ctx: PortalContext,
     containerEl: HTMLElement,
     onReveal: (path: string) => void,
+    onFilter: (query: string) => void,
   ) {
     this.ctx = ctx;
     this.containerEl = containerEl;
     this.onReveal = onReveal;
+    this.onFilter = onFilter;
   }
 
   mount(): void {
@@ -49,12 +52,15 @@ export class JumpInput {
   private reset(): void {
     if (this.inputEl) this.inputEl.value = '';
     this.resultsEl?.empty();
+    this.onFilter('');
   }
 
   private async search(): Promise<void> {
     const query = this.inputEl?.value.trim() ?? '';
     const results = this.resultsEl;
     if (!results) return;
+    // Filter the folder tree live alongside the ranked dropdown.
+    this.onFilter(query);
     results.empty();
     if (!query) return;
 

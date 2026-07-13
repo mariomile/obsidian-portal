@@ -10,6 +10,13 @@ interface Decor {
   color?: string;
 }
 
+/** Active tree filter: `q` = lowercased query, `show` = folder paths on the
+ *  path to a matching file (rendered force-expanded). */
+interface Filter {
+  q: string;
+  show: Set<string>;
+}
+
 /**
  * Folders section (U3): the vault folder hierarchy as a collapsible tree.
  * Collapse state persists in settings; clicking a file opens it, a folder
@@ -24,18 +31,61 @@ export class FoldersSection {
     this.containerEl = containerEl;
   }
 
+  private filterQuery = '';
+
+  /** Filter the tree live (Craft-style): show only matching files and the
+   *  folders on the path to them, force-expanded. Empty query restores normal. */
+  setFilter(query: string): void {
+    const next = query.trim().toLowerCase();
+    if (next === this.filterQuery) return;
+    this.filterQuery = next;
+    this.render();
+  }
+
   render(): void {
     this.containerEl.empty();
     // The whole tree accepts drops onto the vault root.
     makeDropTarget(this.containerEl, '', this.ctx.app, () => this.render());
-    this.renderChildren(this.ctx.app.vault.getRoot(), this.containerEl, 0);
+    const filter = this.buildFilter();
+    this.renderChildren(this.ctx.app.vault.getRoot(), this.containerEl, 0, filter);
   }
 
-  private renderChildren(folder: TFolder, parentEl: HTMLElement, depth: number): void {
+  private buildFilter(): Filter | null {
+    if (!this.filterQuery) return null;
+    const q = this.filterQuery;
+    const show = new Set<string>();
+    const walk = (folder: TFolder): void => {
+      for (const child of folder.children) {
+        if (child instanceof TFile) {
+          if (child.basename.toLowerCase().includes(q)) {
+            for (const ancestor of ancestorFolderPaths(child.path)) show.add(ancestor);
+          }
+        } else if (child instanceof TFolder) {
+          walk(child);
+        }
+      }
+    };
+    walk(this.ctx.app.vault.getRoot());
+    return { q, show };
+  }
+
+  private renderChildren(
+    folder: TFolder,
+    parentEl: HTMLElement,
+    depth: number,
+    filter: Filter | null,
+  ): void {
     const sorted = [...folder.children].sort((a, b) => this.compareChildren(a, b));
     for (const child of sorted) {
-      if (child instanceof TFolder) this.renderFolder(child, parentEl, depth);
-      else if (child instanceof TFile) this.renderFile(child, parentEl, depth);
+      if (child instanceof TFolder) {
+        if (!filter || filter.show.has(child.path)) {
+          this.renderFolder(child, parentEl, depth, filter);
+        }
+      } else if (child instanceof TFile) {
+        if (!filter || child.basename.toLowerCase().includes(filter.q)) {
+          this.renderFile(child, parentEl, depth);
+        }
+      }
     }
   }
 
@@ -73,8 +123,14 @@ export class FoldersSection {
     };
   }
 
-  private renderFolder(folder: TFolder, parentEl: HTMLElement, depth: number): void {
-    const expanded = this.isExpanded(folder.path);
+  private renderFolder(
+    folder: TFolder,
+    parentEl: HTMLElement,
+    depth: number,
+    filter: Filter | null,
+  ): void {
+    // While filtering, folders on the match path are always shown expanded.
+    const expanded = filter ? true : this.isExpanded(folder.path);
     const row = parentEl.createDiv({ cls: 'portal-tree-row portal-folder' });
     row.style.setProperty('--portal-depth', String(depth));
     row.dataset.path = folder.path;
@@ -95,7 +151,7 @@ export class FoldersSection {
     // never renders thousands of rows at once.
     if (expanded) {
       const childrenEl = parentEl.createDiv({ cls: 'portal-tree-children' });
-      this.renderChildren(folder, childrenEl, depth + 1);
+      this.renderChildren(folder, childrenEl, depth + 1, filter);
     }
   }
 
