@@ -115,6 +115,12 @@ export class PortalView extends ItemView {
       this.folders = new FoldersSection(this.ctx, foldersBody);
       this.folders.render();
 
+      // Keyboard navigation: arrows move/expand/collapse, Enter opens/toggles.
+      foldersBody.setAttribute('tabindex', '0');
+      this.registerDomEvent(foldersBody, 'keydown', (event: KeyboardEvent) => {
+        this.folders?.handleKey(event);
+      });
+
       // Debounced re-render coalesces bursts (bulk moves, sync). Registered
       // here (after layout-ready) so the vault-load create storm is already past.
       const rerender = debounce(() => this.folders?.render(), 150, true);

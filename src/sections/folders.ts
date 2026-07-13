@@ -32,6 +32,7 @@ export class FoldersSection {
   }
 
   private filterQuery = '';
+  private cursorPath: string | null = null;
 
   /** Filter the tree live (Craft-style): show only matching files and the
    *  folders on the path to them, force-expanded. Empty query restores normal. */
@@ -48,6 +49,85 @@ export class FoldersSection {
     makeDropTarget(this.containerEl, '', this.ctx.app, () => this.render());
     const filter = this.buildFilter();
     this.renderChildren(this.ctx.app.vault.getRoot(), this.containerEl, 0, filter);
+    this.applyCursor();
+  }
+
+  /** Keyboard navigation over the visible tree rows (wired by the view). */
+  handleKey(event: KeyboardEvent): void {
+    const rows = Array.from(
+      this.containerEl.querySelectorAll<HTMLElement>('.portal-tree-row'),
+    );
+    if (rows.length === 0) return;
+    const index = this.cursorPath
+      ? rows.findIndex((r) => r.dataset.path === this.cursorPath)
+      : -1;
+
+    const moveTo = (i: number): void => {
+      const row = rows[Math.max(0, Math.min(rows.length - 1, i))];
+      if (!row) return;
+      this.cursorPath = row.dataset.path ?? null;
+      this.applyCursor();
+      row.scrollIntoView({ block: 'nearest' });
+    };
+    const cursorFolder = (): TFolder | null => {
+      if (!this.cursorPath) return null;
+      const f = this.ctx.app.vault.getAbstractFileByPath(this.cursorPath);
+      return f instanceof TFolder ? f : null;
+    };
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        moveTo(index < 0 ? 0 : index + 1);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        moveTo(index < 0 ? 0 : index - 1);
+        break;
+      case 'Enter': {
+        event.preventDefault();
+        if (!this.cursorPath) break;
+        const target = this.ctx.app.vault.getAbstractFileByPath(this.cursorPath);
+        if (target instanceof TFile) {
+          void this.ctx.app.workspace.getLeaf(false).openFile(target);
+        } else if (target instanceof TFolder) {
+          void this.toggleFolder(target.path);
+        }
+        break;
+      }
+      case 'ArrowRight': {
+        const folder = cursorFolder();
+        if (folder && !this.isExpanded(folder.path)) {
+          event.preventDefault();
+          void this.toggleFolder(folder.path);
+        }
+        break;
+      }
+      case 'ArrowLeft': {
+        const folder = cursorFolder();
+        if (folder && this.isExpanded(folder.path)) {
+          event.preventDefault();
+          void this.toggleFolder(folder.path);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  /** Re-apply the keyboard cursor highlight after any render (by path). */
+  private applyCursor(): void {
+    for (const el of Array.from(
+      this.containerEl.querySelectorAll('.portal-tree-row.is-kb'),
+    )) {
+      el.removeClass('is-kb');
+    }
+    if (!this.cursorPath) return;
+    const row = this.containerEl.querySelector(
+      `.portal-tree-row[data-path="${CSS.escape(this.cursorPath)}"]`,
+    );
+    if (row instanceof HTMLElement) row.addClass('is-kb');
   }
 
   private buildFilter(): Filter | null {
@@ -142,6 +222,7 @@ export class FoldersSection {
     if (decor.color) icon.style.color = decor.color;
     row.createSpan({ cls: 'portal-label', text: folder.name });
     row.addEventListener('click', () => {
+      this.cursorPath = folder.path;
       void this.toggleFolder(folder.path);
     });
     makeDraggable(row, folder.path);
@@ -213,6 +294,7 @@ export class FoldersSection {
 
   /** Expand ancestors of `file`, then highlight + scroll its row into view. */
   reveal(file: TFile): void {
+    this.cursorPath = file.path;
     const expanded = this.ctx.settings.expandedFolders;
     let changed = false;
     for (const ancestor of ancestorFolderPaths(file.path)) {
