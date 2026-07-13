@@ -5,6 +5,7 @@ import { FoldersSection } from './sections/folders';
 import { TagsSection } from './sections/tags';
 import { CollectionsSection } from './sections/collections';
 import { PinnedSection, RecentSection } from './sections/pins-recent';
+import { JumpInput } from './nav/jump';
 
 export const PORTAL_VIEW_TYPE = 'portal';
 
@@ -44,6 +45,9 @@ export class PortalView extends ItemView {
   async onOpen(): Promise<void> {
     this.contentEl.empty();
     this.contentEl.addClass('portal-rail');
+
+    // Jump box sits above every section (U7).
+    new JumpInput(this.ctx, this.contentEl).mount();
 
     const bodies = new Map<string, HTMLElement>();
     for (const name of SECTIONS) {

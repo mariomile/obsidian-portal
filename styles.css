@@ -31,6 +31,21 @@
   opacity: 0.5;
 }
 
+/* --- U7: jump box --------------------------------------------------------- */
+.portal-jump {
+  padding: 0 var(--size-4-2, 8px) var(--size-4-2, 8px);
+}
+.portal-jump-input {
+  width: 100%;
+  font-size: var(--font-ui-small, 0.8rem);
+}
+.portal-jump-results {
+  margin-top: 4px;
+}
+.portal-jump-hit .portal-label {
+  color: var(--text-normal);
+}
+
 /* --- U3: folder/file tree ------------------------------------------------- */
 .portal-tree-row {
   display: flex;
