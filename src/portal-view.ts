@@ -4,6 +4,7 @@ import type { PortalContext } from './types';
 import { FoldersSection } from './sections/folders';
 import { TagsSection } from './sections/tags';
 import { CollectionsSection } from './sections/collections';
+import { PinnedSection, RecentSection } from './sections/pins-recent';
 
 export const PORTAL_VIEW_TYPE = 'portal';
 
@@ -20,6 +21,8 @@ export class PortalView extends ItemView {
   private folders: FoldersSection | null = null;
   private tags: TagsSection | null = null;
   private collections: CollectionsSection | null = null;
+  private pinned: PinnedSection | null = null;
+  private recent: RecentSection | null = null;
 
   constructor(leaf: WorkspaceLeaf, ctx: PortalContext) {
     super(leaf);
@@ -96,12 +99,26 @@ export class PortalView extends ItemView {
       this.registerEvent(this.app.metadataCache.on('changed', rerenderMeta));
       this.registerEvent(this.app.metadataCache.on('resolved', rerenderMeta));
     }
+
+    const pinnedBody = bodies.get('pinned');
+    if (pinnedBody) {
+      this.pinned = new PinnedSection(this.ctx, pinnedBody);
+      this.pinned.render();
+    }
+    const recentBody = bodies.get('recent');
+    if (recentBody) {
+      this.recent = new RecentSection(this.ctx, recentBody);
+      this.recent.render();
+      this.registerEvent(this.app.workspace.on('file-open', () => this.recent?.render()));
+    }
   }
 
   async onClose(): Promise<void> {
     this.folders = null;
     this.tags = null;
     this.collections = null;
+    this.pinned = null;
+    this.recent = null;
     this.contentEl.empty();
     this.contentEl.removeClass('portal-rail');
   }

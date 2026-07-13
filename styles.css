@@ -86,6 +86,26 @@
   font-style: italic;
 }
 
+/* --- U6: pinned rows (inline unpin on hover) ------------------------------ */
+.portal-pin-remove {
+  flex: 0 0 auto;
+  width: 16px;
+  text-align: center;
+  color: var(--text-faint);
+  opacity: 0;
+  cursor: var(--cursor, pointer);
+}
+.portal-pin:hover .portal-pin-remove {
+  opacity: 1;
+}
+.portal-pin-remove:hover {
+  color: var(--text-normal);
+}
+.portal-pin.is-stale .portal-label {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
 /* --- U5: collection rows -------------------------------------------------- */
 .portal-collection-icon {
   display: inline-flex;
