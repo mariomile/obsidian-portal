@@ -232,6 +232,27 @@
   font-size: 0.9em;
   line-height: 1;
 }
+.portal-collection-open {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--text-faint);
+  opacity: 0;
+  transition: opacity var(--portal-motion), color var(--portal-motion);
+}
+.portal-collection-open svg {
+  width: 13px;
+  height: 13px;
+}
+.portal-collection:hover .portal-collection-open {
+  opacity: 1;
+}
+.portal-collection-open:hover {
+  color: var(--text-normal);
+}
 
 /* --- inline rename input --------------------------------------------------- */
 .portal-rename-input {
