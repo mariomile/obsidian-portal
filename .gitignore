@@ -1,0 +1,8 @@
+node_modules/
+data.json
+main.js
+*.map
+.DS_Store
+
+# Local dev deploy target (your vault path stays out of git)
+.obsidian-plugin-dir

@@ -1,0 +1,9 @@
+{
+  "id": "portal",
+  "name": "Portal",
+  "version": "0.1.0",
+  "minAppVersion": "1.12.7",
+  "description": "A Craft-style unified navigator: folders, tags, and collections in one sidebar rail.",
+  "author": "Mario Miletta",
+  "isDesktopOnly": false
+}
