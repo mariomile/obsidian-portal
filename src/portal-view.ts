@@ -9,24 +9,20 @@ import { PinnedSection, RecentSection } from './sections/pins-recent';
 import { BookmarksSection } from './sections/bookmarks';
 import { getBookmarks } from './obsidian-internals';
 import { JumpInput } from './nav/jump';
-import { showFileMenu, showBulkMenu, createNote, type MenuActions } from './nav/context-menu';
+import {
+  showFileMenu,
+  showBulkMenu,
+  createNote,
+  createFolder,
+  type MenuActions,
+} from './nav/context-menu';
 import { mountToolbar, type ToolbarActions } from './nav/toolbar';
 import { mountNavBlock } from './nav/nav-block';
 import { startInlineRename } from './nav/rename';
 import type { TAbstractFile } from 'obsidian';
+import { PORTAL_SECTION_LABELS } from './section-config';
 
 export const PORTAL_VIEW_TYPE = 'portal';
-
-/** Fixed top→bottom order of the rail (R2). Sections are filled by their units:
- *  Folders (U3), Tags (U4), Collections (U5), Pinned + Recent (U6). */
-const SECTIONS = [
-  'Pinned',
-  'Bookmarks',
-  'Recent',
-  'Folders',
-  'Tags',
-  'Collections',
-] as const;
 
 /**
  * Portal's sidebar rail. Mounts the labelled section containers in order and
@@ -40,7 +36,6 @@ export class PortalView extends ItemView {
   private pinned: PinnedSection | null = null;
   private recent: RecentSection | null = null;
   private bookmarks: BookmarksSection | null = null;
-  private breadcrumbEl: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, ctx: PortalContext) {
     super(leaf);
@@ -63,22 +58,17 @@ export class PortalView extends ItemView {
     this.contentEl.empty();
     this.contentEl.addClass('portal-rail');
 
-    // Craft-style fixed nav block, then jump + toolbar, above every section.
-    mountNavBlock(this.app, this.contentEl);
-    new JumpInput(
+    // Native file-manager contract: the nav header must be the first direct
+    // child so the active theme owns its position and dots-to-tools behavior.
+    const jump = new JumpInput(
       this.ctx,
       this.contentEl,
       (path) => this.revealInTree(path),
-      (query) => this.folders?.setFilter(query),
-    ).mount();
-    mountToolbar(this.contentEl, this.toolbarActions());
-
-    // Breadcrumb of the active file's folder path (click a crumb → expand it).
-    this.breadcrumbEl = this.contentEl.createDiv({ cls: 'portal-breadcrumb' });
-    this.updateBreadcrumb(this.app.workspace.getActiveFile());
-    this.registerEvent(
-      this.app.workspace.on('file-open', (file) => this.updateBreadcrumb(file)),
     );
+    mountToolbar(this.contentEl, this.toolbarActions(jump));
+    jump.mount();
+    // App destinations stay prominent; search is secondary behind its toolbar icon.
+    mountNavBlock(this.app, this.contentEl);
 
     // Delegated context menu (U8): any row carrying a data-path opens the menu.
     this.registerDomEvent(this.contentEl, 'contextmenu', (event: MouseEvent) => {
@@ -123,37 +113,57 @@ export class PortalView extends ItemView {
     });
 
     const bodies = new Map<string, HTMLElement>();
-    for (const name of SECTIONS) {
-      const key = name.toLowerCase();
+    for (const key of this.ctx.settings.sectionOrder) {
+      if (!this.ctx.settings.enabledSections.includes(key)) continue;
+      const collapsible = key === 'folders';
       const section = this.contentEl.createDiv({
         cls: 'portal-section',
         attr: { 'data-section': key },
       });
-      if (this.ctx.settings.collapsedSections.includes(key)) {
+      if (collapsible && this.ctx.settings.collapsedSections.includes(key)) {
         section.addClass('is-collapsed');
       }
 
-      // The header is the collapse control: a chevron that rotates via CSS
-      // (no re-render on toggle) + the section label. Keyboard-operable so the
-      // rail is navigable without a mouse, mirroring Obsidian's nav headers.
+      // Craft gives Folders the interactive surface. The remaining macro
+      // sections are flat labels rather than a stack of generic accordions.
       const header = section.createDiv({
         cls: 'portal-section-header',
-        attr: { role: 'button', tabindex: '0', 'aria-expanded': String(!section.hasClass('is-collapsed')) },
+        attr: collapsible
+          ? {
+              role: 'button',
+              tabindex: '0',
+              'aria-expanded': String(!section.hasClass('is-collapsed')),
+            }
+          : {},
       });
-      const twisty = header.createSpan({ cls: 'portal-section-twisty' });
-      setIcon(twisty, 'chevron-down');
-      header.createSpan({ cls: 'portal-section-title', text: name });
+      header.createSpan({ cls: 'portal-section-title', text: PORTAL_SECTION_LABELS[key] });
+      if (key === 'folders') {
+        const actions = header.createDiv({ cls: 'portal-section-actions' });
+        const addFolder = actions.createEl('button', {
+          cls: 'clickable-icon portal-section-action',
+          attr: { type: 'button', 'aria-label': 'New folder', title: 'New folder' },
+        });
+        setIcon(addFolder, 'plus');
+        addFolder.addEventListener('click', (event) => {
+          event.stopPropagation();
+          void createFolder(this.app, this.app.vault.getRoot());
+        });
+        const twisty = actions.createSpan({ cls: 'portal-section-twisty' });
+        setIcon(twisty, 'chevron-down');
+      }
 
-      const toggle = (): void => {
-        void this.toggleSection(key, section, header);
-      };
-      header.addEventListener('click', toggle);
-      header.addEventListener('keydown', (event: KeyboardEvent) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          toggle();
-        }
-      });
+      if (collapsible) {
+        const toggle = (): void => {
+          void this.toggleSection(key, section, header);
+        };
+        header.addEventListener('click', toggle);
+        header.addEventListener('keydown', (event: KeyboardEvent) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggle();
+          }
+        });
+      }
 
       bodies.set(key, section.createDiv({ cls: 'portal-section-body' }));
     }
@@ -255,38 +265,30 @@ export class PortalView extends ItemView {
     };
   }
 
-  private toolbarActions(): ToolbarActions {
+  private toolbarActions(jump: JumpInput): ToolbarActions {
     return {
-      revealActive: () => {
-        const active = this.app.workspace.getActiveFile();
-        if (active) this.revealInTree(active.path);
-      },
+      toggleSearch: () => jump.toggle(),
       newNote: () => {
         const active = this.app.workspace.getActiveFile();
         const parent = active?.parent ?? this.app.vault.getRoot();
         void createNote(this.app, parent);
       },
-      collapseAll: () => void this.folders?.collapseAll(),
-      expandAll: () => void this.folders?.expandAll(),
+      newFolder: () => {
+        const active = this.app.workspace.getActiveFile();
+        const parent = active?.parent ?? this.app.vault.getRoot();
+        void createFolder(this.app, parent);
+      },
+      shouldCollapseFolders: () => this.ctx.settings.expandedFolders.length > 0,
+      toggleAllFolders: async () => {
+        if (!this.folders) return;
+        if (this.ctx.settings.expandedFolders.length > 0) {
+          await this.folders.collapseAll();
+        } else {
+          await this.folders.expandAll();
+        }
+      },
       changeSort: (event) => this.showSortMenu(event),
     };
-  }
-
-  private updateBreadcrumb(file: TFile | null): void {
-    const bar = this.breadcrumbEl;
-    if (!bar) return;
-    bar.empty();
-    if (!file) return;
-    const segments = file.path.split('/');
-    segments.pop(); // drop the filename
-    let acc = '';
-    segments.forEach((segment, i) => {
-      if (i > 0) bar.createSpan({ cls: 'portal-crumb-sep', text: '/' });
-      acc = acc ? `${acc}/${segment}` : segment;
-      const path = acc;
-      const crumb = bar.createSpan({ cls: 'portal-crumb', text: segment });
-      crumb.addEventListener('click', () => this.folders?.expandTo(path));
-    });
   }
 
   private showSortMenu(event: MouseEvent): void {
@@ -343,7 +345,6 @@ export class PortalView extends ItemView {
     this.pinned = null;
     this.recent = null;
     this.bookmarks = null;
-    this.breadcrumbEl = null;
     this.contentEl.empty();
     this.contentEl.removeClass('portal-rail');
   }

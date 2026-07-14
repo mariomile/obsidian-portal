@@ -280,6 +280,7 @@ export class FoldersSection {
     setIcon(icon, decor.icon ?? (expanded ? 'folder-open' : 'folder'));
     if (decor.color) icon.style.color = decor.color;
     row.createSpan({ cls: 'portal-label', text: folder.name });
+    row.createSpan({ cls: 'portal-count', text: String(folder.children.length) });
     row.addEventListener('click', () => {
       this.cursorPath = folder.path;
       void this.toggleFolder(folder.path);

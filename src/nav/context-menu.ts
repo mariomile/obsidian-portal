@@ -126,7 +126,7 @@ export async function createNote(app: App, parent: TFolder | null): Promise<void
   await app.workspace.getLeaf(false).openFile(file);
 }
 
-async function createFolder(app: App, parent: TFolder | null): Promise<void> {
+export async function createFolder(app: App, parent: TFolder | null): Promise<void> {
   const path = uniquePath(app, parent?.path ?? '', 'New folder');
   await app.vault.createFolder(path);
 }

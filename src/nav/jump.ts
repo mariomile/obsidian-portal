@@ -5,15 +5,15 @@ import { isSonarPresent, sonarQuery, type JumpHit } from '../integrations/sonar'
 const FALLBACK_LIMIT = 20;
 
 /**
- * Jump (U7): a filter box at the top of the rail. Ranked results come from
- * sonar's in-process query when present; otherwise a plain substring filter
+ * Secondary note search, revealed from the toolbar. Ranked results come from
+ * Sonar's in-process query when present; otherwise a plain substring search
  * over vault files. Enter opens the top hit; click opens a specific one.
  */
 export class JumpInput {
   private readonly ctx: PortalContext;
   private readonly containerEl: HTMLElement;
   private readonly onReveal: (path: string) => void;
-  private readonly onFilter: (query: string) => void;
+  private wrapEl: HTMLElement | null = null;
   private inputEl: HTMLInputElement | null = null;
   private resultsEl: HTMLElement | null = null;
 
@@ -21,19 +21,22 @@ export class JumpInput {
     ctx: PortalContext,
     containerEl: HTMLElement,
     onReveal: (path: string) => void,
-    onFilter: (query: string) => void,
   ) {
     this.ctx = ctx;
     this.containerEl = containerEl;
     this.onReveal = onReveal;
-    this.onFilter = onFilter;
   }
 
   mount(): void {
     const wrap = this.containerEl.createDiv({ cls: 'portal-jump' });
+    this.wrapEl = wrap;
     this.inputEl = wrap.createEl('input', {
       cls: 'portal-jump-input',
-      attr: { type: 'search', placeholder: 'Jump to a note…' },
+      attr: {
+        type: 'search',
+        placeholder: isSonarPresent(this.ctx.app) ? 'Search with Sonar…' : 'Search notes…',
+        'aria-label': 'Search notes',
+      },
     });
     this.resultsEl = wrap.createDiv({ cls: 'portal-jump-results' });
 
@@ -44,23 +47,34 @@ export class JumpInput {
         event.preventDefault();
         this.openTop();
       } else if (event.key === 'Escape') {
-        this.reset();
+        this.setOpen(false);
       }
     });
+  }
+
+  toggle(): boolean {
+    return this.setOpen(!this.wrapEl?.hasClass('is-open'));
+  }
+
+  private setOpen(open: boolean): boolean {
+    this.wrapEl?.toggleClass('is-open', open);
+    if (open) {
+      window.requestAnimationFrame(() => this.inputEl?.focus());
+    } else {
+      this.reset();
+    }
+    return open;
   }
 
   private reset(): void {
     if (this.inputEl) this.inputEl.value = '';
     this.resultsEl?.empty();
-    this.onFilter('');
   }
 
   private async search(): Promise<void> {
     const query = this.inputEl?.value.trim() ?? '';
     const results = this.resultsEl;
     if (!results) return;
-    // Filter the folder tree live alongside the ranked dropdown.
-    this.onFilter(query);
     results.empty();
     if (!query) return;
 
@@ -103,7 +117,7 @@ export class JumpInput {
       void this.ctx.app.workspace.getLeaf(false).openFile(file);
       // Highlight where the file lives in the Folders tree.
       this.onReveal(path);
-      this.reset();
+      this.setOpen(false);
     }
   }
 }

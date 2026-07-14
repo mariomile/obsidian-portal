@@ -25,7 +25,7 @@
 }
 
 .portal-section {
-  margin-bottom: var(--size-4-3, 12px);
+  margin-bottom: var(--size-4-4, 16px);
 }
 .portal-section-hidden {
   display: none;
@@ -35,15 +35,28 @@
 .portal-section-header {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: var(--size-4-1, 4px) var(--size-4-2, 8px);
-  border-radius: var(--radius-s, 4px);
+  gap: var(--size-4-2, 8px);
+  min-height: 38px;
+  padding: var(--size-4-1, 4px) var(--size-4-3, 12px);
+  border-radius: var(--radius-l, 12px);
   cursor: var(--cursor, pointer);
   user-select: none;
   transition: background-color var(--portal-motion), color var(--portal-motion);
 }
 .portal-section-header:hover {
   background-color: var(--portal-wash);
+}
+.portal-section[data-section='folders'] .portal-section-header {
+  background-color: var(--portal-wash);
+}
+.portal-section:not([data-section='folders']) .portal-section-header {
+  min-height: 32px;
+  padding-block: 2px;
+  border-radius: 0;
+  cursor: default;
+}
+.portal-section:not([data-section='folders']) .portal-section-header:hover {
+  background-color: transparent;
 }
 .portal-section-header:focus-visible {
   outline: 2px solid var(--background-modifier-border-focus, var(--interactive-accent));
@@ -55,9 +68,9 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  color: var(--text-faint);
+  width: 24px;
+  height: 24px;
+  color: var(--text-muted);
   /* Chevron points down when expanded; rotates to point right when collapsed.
      Rotating in CSS avoids re-issuing setIcon on every toggle. */
   transition: transform var(--portal-motion), color var(--portal-motion);
@@ -74,14 +87,27 @@
 }
 
 .portal-section-title {
-  font-size: var(--font-ui-smaller, 0.75rem);
-  font-weight: var(--font-medium, 500);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-faint);
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--font-ui-medium, 0.9375rem);
+  font-weight: var(--font-semibold, 600);
+  color: var(--text-normal);
   transition: color var(--portal-motion);
 }
 .portal-section-header:hover .portal-section-title {
+  color: var(--text-normal);
+}
+
+.portal-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.portal-section-action {
+  width: 28px;
+  height: 28px;
+  padding: 5px;
   color: var(--text-muted);
 }
 
@@ -91,28 +117,19 @@
 }
 
 .portal-section-body {
-  padding-block: 2px;
+  padding-block: var(--size-4-1, 4px) 0;
   /* Isolate each section's reflow from the rest of the rail/workspace. */
   contain: layout style;
 }
-/* Empty (built-but-no-content) sections read as intentional, not broken. */
-.portal-section-body:empty::after {
-  content: '—';
-  display: block;
-  padding: 2px var(--size-4-2, 8px);
-  color: var(--text-faint);
-  opacity: 0.4;
-}
-
 /* --- tree rows (folders, files, tags, pins, recents, collections) ---------
    Craft-airy: comfortable height, a per-row icon slot, generous gap. */
 .portal-tree-row {
   display: flex;
   align-items: center;
   gap: 5px;
-  min-height: 28px;
-  padding: 4px 8px;
-  padding-inline-start: calc(8px + var(--portal-depth, 0) * var(--portal-indent));
+  min-height: 32px;
+  padding: 4px 12px;
+  padding-inline-start: calc(12px + var(--portal-depth, 0) * var(--portal-indent));
   border-radius: 7px;
   cursor: var(--cursor, pointer);
   color: var(--text-normal);
@@ -167,7 +184,7 @@
   color: var(--text-normal);
 }
 .portal-folder > .portal-row-icon {
-  color: var(--text-accent);
+  color: var(--text-muted);
 }
 
 /* --- twisties (folder / tag tree) ----------------------------------------- */
@@ -279,7 +296,11 @@
 
 /* --- jump box -------------------------------------------------------------- */
 .portal-jump {
+  display: none;
   padding: 0 var(--size-4-2, 8px) var(--size-4-2, 8px);
+}
+.portal-jump.is-open {
+  display: block;
 }
 .portal-jump-input {
   width: 100%;
@@ -316,46 +337,9 @@
   white-space: nowrap;
 }
 
-/* --- breadcrumb of the active file's folder path -------------------------- */
-.portal-breadcrumb {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px;
-  padding: 0 var(--size-4-2, 8px) var(--size-4-2, 8px);
-  font-size: var(--font-ui-smaller, 0.75rem);
-  color: var(--text-faint);
-}
-.portal-breadcrumb:empty {
-  display: none;
-}
-.portal-crumb {
-  cursor: var(--cursor, pointer);
-  border-radius: 3px;
-  padding: 0 2px;
-}
-.portal-crumb:hover {
-  color: var(--text-normal);
-  background-color: var(--portal-wash);
-}
-.portal-crumb-sep {
-  color: var(--text-faint);
-  opacity: 0.6;
-}
-
-/* --- rail toolbar (reveal / new / collapse-all / expand-all) -------------- */
-.portal-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 0 var(--size-4-2, 8px) var(--size-4-2, 8px);
-}
-.portal-tool {
-  color: var(--text-muted);
-}
-.portal-tool:hover {
-  color: var(--text-normal);
-}
+/* The toolbar intentionally has no Portal-specific layout. Its native
+   nav-header/nav-buttons-container classes let the active Obsidian theme own
+   the same position, collapsed dots, hover reveal and motion as File Explorer. */
 
 /* --- drag-and-drop move target (U9) --------------------------------------- */
 .portal-drop-target {
@@ -369,7 +353,6 @@
 .portal-nav {
   padding: 0 var(--size-4-1, 4px) var(--size-4-2, 8px);
   margin-bottom: var(--size-4-1, 4px);
-  border-bottom: var(--hairline, 1px) solid var(--background-modifier-border);
 }
 .portal-nav-row {
   font-weight: var(--font-medium, 500);

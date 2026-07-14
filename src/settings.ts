@@ -1,6 +1,13 @@
 import { PluginSettingTab, Setting } from 'obsidian';
 import type { App } from 'obsidian';
 import type PortalPlugin from './main';
+import {
+  PORTAL_SECTION_KEYS,
+  PORTAL_SECTION_LABELS,
+  parseEnabledSections,
+  parseSectionOrder,
+  type PortalSectionKey,
+} from './section-config';
 
 export type SortMode = 'name' | 'modified' | 'created';
 
@@ -23,6 +30,10 @@ export interface PortalSettings {
    *  empty → every section starts expanded, so a fresh install never hides a
    *  user's content; a section is added here only when the user folds it. */
   collapsedSections: string[];
+  /** Sections shown in the rail. An explicit empty list hides every section. */
+  enabledSections: PortalSectionKey[];
+  /** Persistent top-to-bottom section order, including hidden sections. */
+  sectionOrder: PortalSectionKey[];
 }
 
 export const DEFAULT_SETTINGS: PortalSettings = {
@@ -32,6 +43,8 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   pinned: [],
   hideHexTags: true,
   collapsedSections: [],
+  enabledSections: [...PORTAL_SECTION_KEYS],
+  sectionOrder: [...PORTAL_SECTION_KEYS],
 };
 
 const asStringArray = (value: unknown, fallback: string[]): string[] =>
@@ -57,10 +70,12 @@ export function parseSettings(raw: unknown): PortalSettings {
         ? data.hideHexTags
         : DEFAULT_SETTINGS.hideHexTags,
     collapsedSections: asStringArray(data.collapsedSections, DEFAULT_SETTINGS.collapsedSections),
+    enabledSections: parseEnabledSections(data.enabledSections),
+    sectionOrder: parseSectionOrder(data.sectionOrder),
   };
 }
 
-/** U2 settings tab — just the hide toggle for now; expanded in U10. */
+/** Native settings for explorer behaviour and rail section composition. */
 export class PortalSettingTab extends PluginSettingTab {
   private readonly plugin: PortalPlugin;
 
@@ -102,5 +117,59 @@ export class PortalSettingTab extends PluginSettingTab {
             this.plugin.refreshRail();
           }),
       );
+
+    containerEl.createEl('h3', { text: 'Sections' });
+    containerEl.createEl('p', {
+      cls: 'setting-item-description',
+      text: 'Choose which sections appear in Portal and move them into the order you prefer.',
+    });
+
+    for (const [index, key] of this.plugin.settings.sectionOrder.entries()) {
+      const setting = new Setting(containerEl)
+        .setName(PORTAL_SECTION_LABELS[key])
+        .addToggle((toggle) =>
+          toggle
+            .setTooltip(`Show ${PORTAL_SECTION_LABELS[key]}`)
+            .setValue(this.plugin.settings.enabledSections.includes(key))
+            .onChange(async (value) => {
+              const enabled = this.plugin.settings.enabledSections;
+              if (value && !enabled.includes(key)) enabled.push(key);
+              if (!value) {
+                const enabledIndex = enabled.indexOf(key);
+                if (enabledIndex >= 0) enabled.splice(enabledIndex, 1);
+              }
+              await this.plugin.saveSettings();
+              this.plugin.refreshRail();
+            }),
+        );
+
+      setting.addExtraButton((button) =>
+        button
+          .setIcon('arrow-up')
+          .setTooltip(`Move ${PORTAL_SECTION_LABELS[key]} up`)
+          .setDisabled(index === 0)
+          .onClick(() => void this.moveSection(index, -1)),
+      );
+      setting.addExtraButton((button) =>
+        button
+          .setIcon('arrow-down')
+          .setTooltip(`Move ${PORTAL_SECTION_LABELS[key]} down`)
+          .setDisabled(index === this.plugin.settings.sectionOrder.length - 1)
+          .onClick(() => void this.moveSection(index, 1)),
+      );
+    }
+  }
+
+  private async moveSection(index: number, delta: -1 | 1): Promise<void> {
+    const order = this.plugin.settings.sectionOrder;
+    const target = index + delta;
+    const currentKey = order[index];
+    const targetKey = order[target];
+    if (!currentKey || !targetKey) return;
+    order[index] = targetKey;
+    order[target] = currentKey;
+    await this.plugin.saveSettings();
+    this.plugin.refreshRail();
+    this.display();
   }
 }
