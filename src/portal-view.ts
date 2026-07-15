@@ -7,7 +7,6 @@ import { TagsSection } from './sections/tags';
 import { CollectionsSection } from './sections/collections';
 import { PinnedSection, RecentSection } from './sections/pins-recent';
 import { BookmarksSection } from './sections/bookmarks';
-import { getBookmarks } from './obsidian-internals';
 import { JumpInput } from './nav/jump';
 import {
   showFileMenu,
@@ -19,8 +18,14 @@ import {
 import { mountToolbar, type ToolbarActions } from './nav/toolbar';
 import { mountNavBlock } from './nav/nav-block';
 import { startInlineRename } from './nav/rename';
+import {
+  bookmarkCurrentView,
+  createCollection,
+  openCreateTagModal,
+  openPinItemModal,
+} from './nav/section-actions';
 import type { TAbstractFile } from 'obsidian';
-import { PORTAL_SECTION_LABELS } from './section-config';
+import { PORTAL_SECTION_LABELS, type PortalSectionKey } from './section-config';
 
 export const PORTAL_VIEW_TYPE = 'portal';
 
@@ -62,13 +67,13 @@ export class PortalView extends ItemView {
     // child so the active theme owns its position and dots-to-tools behavior.
     const jump = new JumpInput(
       this.ctx,
-      this.contentEl,
       (path) => this.revealInTree(path),
     );
     mountToolbar(this.contentEl, this.toolbarActions(jump));
-    jump.mount();
+    const scrollEl = this.contentEl.createDiv({ cls: 'portal-rail-scroll' });
+    jump.mount(scrollEl);
     // App destinations stay prominent; search is secondary behind its toolbar icon.
-    mountNavBlock(this.app, this.contentEl);
+    mountNavBlock(this.app, scrollEl);
 
     // Delegated context menu (U8): any row carrying a data-path opens the menu.
     this.registerDomEvent(this.contentEl, 'contextmenu', (event: MouseEvent) => {
@@ -115,55 +120,49 @@ export class PortalView extends ItemView {
     const bodies = new Map<string, HTMLElement>();
     for (const key of this.ctx.settings.sectionOrder) {
       if (!this.ctx.settings.enabledSections.includes(key)) continue;
-      const collapsible = key === 'folders';
-      const section = this.contentEl.createDiv({
+      const section = scrollEl.createDiv({
         cls: 'portal-section',
         attr: { 'data-section': key },
       });
-      if (collapsible && this.ctx.settings.collapsedSections.includes(key)) {
+      if (this.ctx.settings.collapsedSections.includes(key)) {
         section.addClass('is-collapsed');
       }
 
-      // Craft gives Folders the interactive surface. The remaining macro
-      // sections are flat labels rather than a stack of generic accordions.
       const header = section.createDiv({
         cls: 'portal-section-header',
-        attr: collapsible
-          ? {
-              role: 'button',
-              tabindex: '0',
-              'aria-expanded': String(!section.hasClass('is-collapsed')),
-            }
-          : {},
+        attr: {
+          role: 'button',
+          tabindex: '0',
+          'aria-expanded': String(!section.hasClass('is-collapsed')),
+        },
       });
       header.createSpan({ cls: 'portal-section-title', text: PORTAL_SECTION_LABELS[key] });
-      if (key === 'folders') {
-        const actions = header.createDiv({ cls: 'portal-section-actions' });
-        const addFolder = actions.createEl('button', {
+      const actions = header.createDiv({ cls: 'portal-section-actions' });
+      const addAction = this.sectionAddAction(key);
+      if (addAction) {
+        const addButton = actions.createEl('button', {
           cls: 'clickable-icon portal-section-action',
-          attr: { type: 'button', 'aria-label': 'New folder', title: 'New folder' },
+          attr: { type: 'button', 'aria-label': addAction.label, title: addAction.label },
         });
-        setIcon(addFolder, 'plus');
-        addFolder.addEventListener('click', (event) => {
+        setIcon(addButton, 'plus');
+        addButton.addEventListener('click', (event) => {
           event.stopPropagation();
-          void createFolder(this.app, this.app.vault.getRoot());
+          addAction.run();
         });
-        const twisty = actions.createSpan({ cls: 'portal-section-twisty' });
-        setIcon(twisty, 'chevron-down');
       }
+      const twisty = actions.createSpan({ cls: 'portal-section-twisty' });
+      setIcon(twisty, 'chevron-down');
 
-      if (collapsible) {
-        const toggle = (): void => {
-          void this.toggleSection(key, section, header);
-        };
-        header.addEventListener('click', toggle);
-        header.addEventListener('keydown', (event: KeyboardEvent) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            toggle();
-          }
-        });
-      }
+      const toggle = (): void => {
+        void this.toggleSection(key, section, header);
+      };
+      header.addEventListener('click', toggle);
+      header.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggle();
+        }
+      });
 
       bodies.set(key, section.createDiv({ cls: 'portal-section-body' }));
     }
@@ -177,6 +176,15 @@ export class PortalView extends ItemView {
       foldersBody.setAttribute('tabindex', '0');
       this.registerDomEvent(foldersBody, 'keydown', (event: KeyboardEvent) => {
         this.folders?.handleKey(event);
+      });
+      this.registerDomEvent(foldersBody, 'pointerdown', () => {
+        this.folders?.clearKeyboardCursor();
+      });
+      this.registerDomEvent(foldersBody, 'focusout', (event: FocusEvent) => {
+        const next = event.relatedTarget;
+        if (!(next instanceof Node) || !foldersBody.contains(next)) {
+          this.folders?.clearKeyboardCursor();
+        }
       });
 
       // Debounced re-render coalesces bursts (bulk moves, sync). Registered
@@ -227,11 +235,6 @@ export class PortalView extends ItemView {
     if (bookmarksBody) {
       this.bookmarks = new BookmarksSection(this.ctx, bookmarksBody);
       this.bookmarks.render();
-      // Only surface the Bookmarks section when there are native bookmarks —
-      // no clutter for users (like Mario) who rely on Portal's own Pinned.
-      if (getBookmarks(this.app).length === 0) {
-        bookmarksBody.closest('.portal-section')?.addClass('portal-section-hidden');
-      }
     }
     const recentBody = bodies.get('recent');
     if (recentBody) {
@@ -289,6 +292,34 @@ export class PortalView extends ItemView {
       },
       changeSort: (event) => this.showSortMenu(event),
     };
+  }
+
+  private sectionAddAction(
+    key: PortalSectionKey,
+  ): { label: string; run: () => void } | null {
+    switch (key) {
+      case 'folders':
+        return {
+          label: 'New folder',
+          run: () => void createFolder(this.app, this.app.vault.getRoot()),
+        };
+      case 'pinned':
+        return {
+          label: 'Add pin',
+          run: () =>
+            openPinItemModal(this.app, (path) => {
+              void this.pinned?.pinAll([path]);
+            }),
+        };
+      case 'bookmarks':
+        return { label: 'Add bookmark', run: () => bookmarkCurrentView(this.app) };
+      case 'tags':
+        return { label: 'Create tag', run: () => openCreateTagModal(this.app) };
+      case 'collections':
+        return { label: 'Create collection', run: () => createCollection(this.app) };
+      case 'recent':
+        return null;
+    }
   }
 
   private showSortMenu(event: MouseEvent): void {

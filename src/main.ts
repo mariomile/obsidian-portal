@@ -1,5 +1,6 @@
 import { Plugin } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
+import { installTabDedupe } from './nav/tab-dedupe';
 import { PortalView, PORTAL_VIEW_TYPE } from './portal-view';
 import {
   DEFAULT_SETTINGS,
@@ -44,6 +45,9 @@ export default class PortalPlugin extends Plugin {
     });
 
     this.addSettingTab(new PortalSettingTab(this.app, this));
+
+    // Vault-wide focus-existing-tab behaviour (toggleable in settings).
+    installTabDedupe(this);
 
     // Re-apply the hide whenever the layout changes, so a file-explorer leaf
     // the user re-adds (e.g. via the "Files" ribbon) gets hidden again.

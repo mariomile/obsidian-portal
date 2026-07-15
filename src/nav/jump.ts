@@ -11,7 +11,6 @@ const FALLBACK_LIMIT = 20;
  */
 export class JumpInput {
   private readonly ctx: PortalContext;
-  private readonly containerEl: HTMLElement;
   private readonly onReveal: (path: string) => void;
   private wrapEl: HTMLElement | null = null;
   private inputEl: HTMLInputElement | null = null;
@@ -19,16 +18,14 @@ export class JumpInput {
 
   constructor(
     ctx: PortalContext,
-    containerEl: HTMLElement,
     onReveal: (path: string) => void,
   ) {
     this.ctx = ctx;
-    this.containerEl = containerEl;
     this.onReveal = onReveal;
   }
 
-  mount(): void {
-    const wrap = this.containerEl.createDiv({ cls: 'portal-jump' });
+  mount(containerEl: HTMLElement): void {
+    const wrap = containerEl.createDiv({ cls: 'portal-jump' });
     this.wrapEl = wrap;
     this.inputEl = wrap.createEl('input', {
       cls: 'portal-jump-input',

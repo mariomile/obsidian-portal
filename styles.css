@@ -22,6 +22,20 @@
 /* --- rail shell ------------------------------------------------------------ */
 .portal-rail {
   padding: var(--size-4-2, 8px) var(--size-4-1, 4px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Match File Explorer's fixed nav-header + independently scrolling tree. */
+.portal-rail-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.portal-rail > .nav-header {
+  flex: 0 0 auto;
 }
 
 .portal-section {
@@ -39,6 +53,7 @@
   min-height: 38px;
   padding: var(--size-4-1, 4px) var(--size-4-3, 12px);
   border-radius: var(--radius-l, 12px);
+  background-color: transparent;
   cursor: var(--cursor, pointer);
   user-select: none;
   transition: background-color var(--portal-motion), color var(--portal-motion);
@@ -46,17 +61,9 @@
 .portal-section-header:hover {
   background-color: var(--portal-wash);
 }
-.portal-section[data-section='folders'] .portal-section-header {
+.portal-section-header:focus-visible,
+.portal-section-header:has(.portal-section-action:focus-visible) {
   background-color: var(--portal-wash);
-}
-.portal-section:not([data-section='folders']) .portal-section-header {
-  min-height: 32px;
-  padding-block: 2px;
-  border-radius: 0;
-  cursor: default;
-}
-.portal-section:not([data-section='folders']) .portal-section-header:hover {
-  background-color: transparent;
 }
 .portal-section-header:focus-visible {
   outline: 2px solid var(--background-modifier-border-focus, var(--interactive-accent));
@@ -109,6 +116,15 @@
   height: 28px;
   padding: 5px;
   color: var(--text-muted);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--portal-motion), color var(--portal-motion), background-color var(--portal-motion);
+}
+.portal-section-header:hover .portal-section-action,
+.portal-section-header:focus-visible .portal-section-action,
+.portal-section-header:has(.portal-section-action:focus-visible) .portal-section-action {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* Collapsed → body is hidden but stays mounted (renderers keep running). */
@@ -378,6 +394,10 @@
   .portal-tool {
     width: 40px;
     height: 40px;
+  }
+  .portal-section-action {
+    opacity: 1;
+    pointer-events: auto;
   }
   .portal-pin-remove {
     opacity: 1;

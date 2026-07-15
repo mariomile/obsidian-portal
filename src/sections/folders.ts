@@ -33,6 +33,7 @@ export class FoldersSection {
 
   private filterQuery = '';
   private cursorPath: string | null = null;
+  private keyboardCursorVisible = false;
   private readonly selected = new Set<string>();
   private lastSelected: string | null = null;
 
@@ -131,6 +132,10 @@ export class FoldersSection {
       return f instanceof TFolder ? f : null;
     };
 
+    if (['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Enter'].includes(event.key)) {
+      this.keyboardCursorVisible = true;
+    }
+
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
@@ -169,6 +174,7 @@ export class FoldersSection {
       }
       case 'Escape':
         this.clearSelection();
+        this.clearKeyboardCursor();
         break;
       default:
         break;
@@ -182,11 +188,17 @@ export class FoldersSection {
     )) {
       el.removeClass('is-kb');
     }
-    if (!this.cursorPath) return;
+    if (!this.keyboardCursorVisible || !this.cursorPath) return;
     const row = this.containerEl.querySelector(
       `.portal-tree-row[data-path="${CSS.escape(this.cursorPath)}"]`,
     );
     if (row instanceof HTMLElement) row.addClass('is-kb');
+  }
+
+  clearKeyboardCursor(): void {
+    if (!this.keyboardCursorVisible) return;
+    this.keyboardCursorVisible = false;
+    this.applyCursor();
   }
 
   private buildFilter(): Filter | null {
@@ -282,6 +294,7 @@ export class FoldersSection {
     row.createSpan({ cls: 'portal-label', text: folder.name });
     row.createSpan({ cls: 'portal-count', text: String(folder.children.length) });
     row.addEventListener('click', () => {
+      this.clearKeyboardCursor();
       this.cursorPath = folder.path;
       void this.toggleFolder(folder.path);
     });
@@ -309,6 +322,7 @@ export class FoldersSection {
     const label = file.extension === 'md' ? file.basename : file.name;
     row.createSpan({ cls: 'portal-label', text: label });
     row.addEventListener('click', (event) => {
+      this.clearKeyboardCursor();
       if (event.metaKey || event.ctrlKey) {
         this.toggleSelect(file.path);
         return;
@@ -383,6 +397,7 @@ export class FoldersSection {
   /** Expand ancestors of `file`, then highlight + scroll its row into view. */
   reveal(file: TFile): void {
     this.cursorPath = file.path;
+    this.keyboardCursorVisible = false;
     const expanded = this.ctx.settings.expandedFolders;
     let changed = false;
     for (const ancestor of ancestorFolderPaths(file.path)) {
@@ -406,5 +421,6 @@ export class FoldersSection {
       row.addClass('is-active');
       row.scrollIntoView({ block: 'nearest' });
     }
+    this.applyCursor();
   }
 }

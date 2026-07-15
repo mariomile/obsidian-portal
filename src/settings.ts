@@ -26,6 +26,10 @@ export interface PortalSettings {
   pinned: string[];
   /** Hide hex-colour tokens (e.g. #1e1e1e) that Obsidian counts as tags. */
   hideHexTags: boolean;
+  /** Vault-wide: opening a file already shown in a main-area tab focuses that
+   *  tab instead of duplicating it (applies to every open path, not just
+   *  Portal's own). */
+  focusExistingTab: boolean;
   /** Rail section keys (lower-cased, e.g. 'tags') that are collapsed. Default
    *  empty → every section starts expanded, so a fresh install never hides a
    *  user's content; a section is added here only when the user folds it. */
@@ -42,6 +46,7 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   expandedFolders: [],
   pinned: [],
   hideHexTags: true,
+  focusExistingTab: true,
   collapsedSections: [],
   enabledSections: [...PORTAL_SECTION_KEYS],
   sectionOrder: [...PORTAL_SECTION_KEYS],
@@ -69,6 +74,10 @@ export function parseSettings(raw: unknown): PortalSettings {
       typeof data.hideHexTags === 'boolean'
         ? data.hideHexTags
         : DEFAULT_SETTINGS.hideHexTags,
+    focusExistingTab:
+      typeof data.focusExistingTab === 'boolean'
+        ? data.focusExistingTab
+        : DEFAULT_SETTINGS.focusExistingTab,
     collapsedSections: asStringArray(data.collapsedSections, DEFAULT_SETTINGS.collapsedSections),
     enabledSections: parseEnabledSections(data.enabledSections),
     sectionOrder: parseSectionOrder(data.sectionOrder),
@@ -100,6 +109,20 @@ export class PortalSettingTab extends PluginSettingTab {
             this.plugin.settings.hideNativeExplorer = value;
             await this.plugin.saveSettings();
             this.plugin.applyExplorerVisibility();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Focus existing tab')
+      .setDesc(
+        'When a file is already open in a tab, jump to that tab instead of opening a duplicate. Applies everywhere: links, quick switcher, Portal, other plugins.',
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.focusExistingTab)
+          .onChange(async (value) => {
+            this.plugin.settings.focusExistingTab = value;
+            await this.plugin.saveSettings();
           }),
       );
 
