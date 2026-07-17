@@ -20,7 +20,8 @@ interface Filter {
 /**
  * Folders section (U3): the vault folder hierarchy as a collapsible tree.
  * Collapse state persists in settings; clicking a file opens it, a folder
- * toggles. `reveal` expands ancestors of the active file and scrolls to it.
+ * toggles. `reveal` aligns expansion to the active file's ancestor path
+ * (follow mode) or expands additively (legacy), then scrolls to it.
  */
 export class FoldersSection {
   private readonly ctx: PortalContext;
@@ -394,13 +395,16 @@ export class FoldersSection {
     if (row instanceof HTMLElement) row.scrollIntoView({ block: 'nearest' });
   }
 
-  /** Expand ancestors of `file`, then highlight + scroll its row into view. */
+  /**
+   * Align expansion to `file`'s ancestor path (follow mode) or expand
+   * ancestors additively (legacy), then highlight + scroll its row into view.
+   */
   reveal(file: TFile): void {
     this.cursorPath = file.path;
     this.keyboardCursorVisible = false;
     if (this.ctx.settings.followActiveFile) {
       const next = followExpandedFolders(this.ctx.settings.expandedFolders, file.path);
-      if (next) {
+      if (next !== null) {
         this.ctx.settings.expandedFolders = next;
         void this.ctx.saveSettings();
         this.render();

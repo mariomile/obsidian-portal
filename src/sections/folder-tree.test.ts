@@ -53,3 +53,7 @@ test('followExpandedFolders returns null when state already matches (any order)'
 test('followExpandedFolders is not fooled by same-length different sets', () => {
   assert.deepEqual(followExpandedFolders(['a', 'x'], 'a/b/c.md'), ['a', 'a/b']);
 });
+
+test('followExpandedFolders drops extra branches when current is a superset', () => {
+  assert.deepEqual(followExpandedFolders(['a', 'a/b', 'x'], 'a/b/c.md'), ['a', 'a/b']);
+});
