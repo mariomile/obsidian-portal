@@ -1,7 +1,7 @@
 import { TFile, TFolder, setIcon } from 'obsidian';
 import type { TAbstractFile } from 'obsidian';
 import type { PortalContext } from '../types';
-import { ancestorFolderPaths } from './folder-tree.ts';
+import { ancestorFolderPaths, followExpandedFolders } from './folder-tree.ts';
 import { fileIcon } from './file-icon.ts';
 import { makeDraggable, makeDropTarget } from '../nav/dnd';
 
@@ -20,7 +20,8 @@ interface Filter {
 /**
  * Folders section (U3): the vault folder hierarchy as a collapsible tree.
  * Collapse state persists in settings; clicking a file opens it, a folder
- * toggles. `reveal` expands ancestors of the active file and scrolls to it.
+ * toggles. `reveal` aligns expansion to the active file's ancestor path
+ * (follow mode) or expands additively (legacy), then scrolls to it.
  */
 export class FoldersSection {
   private readonly ctx: PortalContext;
@@ -394,21 +395,33 @@ export class FoldersSection {
     if (row instanceof HTMLElement) row.scrollIntoView({ block: 'nearest' });
   }
 
-  /** Expand ancestors of `file`, then highlight + scroll its row into view. */
+  /**
+   * Align expansion to `file`'s ancestor path (follow mode) or expand
+   * ancestors additively (legacy), then highlight + scroll its row into view.
+   */
   reveal(file: TFile): void {
     this.cursorPath = file.path;
     this.keyboardCursorVisible = false;
-    const expanded = this.ctx.settings.expandedFolders;
-    let changed = false;
-    for (const ancestor of ancestorFolderPaths(file.path)) {
-      if (!expanded.includes(ancestor)) {
-        expanded.push(ancestor);
-        changed = true;
+    if (this.ctx.settings.followActiveFile) {
+      const next = followExpandedFolders(this.ctx.settings.expandedFolders, file.path);
+      if (next !== null) {
+        this.ctx.settings.expandedFolders = next;
+        void this.ctx.saveSettings();
+        this.render();
       }
-    }
-    if (changed) {
-      void this.ctx.saveSettings();
-      this.render();
+    } else {
+      const expanded = this.ctx.settings.expandedFolders;
+      let changed = false;
+      for (const ancestor of ancestorFolderPaths(file.path)) {
+        if (!expanded.includes(ancestor)) {
+          expanded.push(ancestor);
+          changed = true;
+        }
+      }
+      if (changed) {
+        void this.ctx.saveSettings();
+        this.render();
+      }
     }
 
     for (const active of Array.from(this.containerEl.querySelectorAll('.portal-file.is-active'))) {

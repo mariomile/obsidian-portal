@@ -30,6 +30,9 @@ export interface PortalSettings {
    *  tab instead of duplicating it (applies to every open path, not just
    *  Portal's own). */
   focusExistingTab: boolean;
+  /** Follow mode: on file-open the Folders tree collapses to exactly the
+   *  active file's ancestor path. Off → reveals are additive (legacy). */
+  followActiveFile: boolean;
   /** Rail section keys (lower-cased, e.g. 'tags') that are collapsed. Default
    *  empty → every section starts expanded, so a fresh install never hides a
    *  user's content; a section is added here only when the user folds it. */
@@ -47,6 +50,7 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   pinned: [],
   hideHexTags: true,
   focusExistingTab: true,
+  followActiveFile: true,
   collapsedSections: [],
   enabledSections: [...PORTAL_SECTION_KEYS],
   sectionOrder: [...PORTAL_SECTION_KEYS],
@@ -78,6 +82,10 @@ export function parseSettings(raw: unknown): PortalSettings {
       typeof data.focusExistingTab === 'boolean'
         ? data.focusExistingTab
         : DEFAULT_SETTINGS.focusExistingTab,
+    followActiveFile:
+      typeof data.followActiveFile === 'boolean'
+        ? data.followActiveFile
+        : DEFAULT_SETTINGS.followActiveFile,
     collapsedSections: asStringArray(data.collapsedSections, DEFAULT_SETTINGS.collapsedSections),
     enabledSections: parseEnabledSections(data.enabledSections),
     sectionOrder: parseSectionOrder(data.sectionOrder),
@@ -122,6 +130,20 @@ export class PortalSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.focusExistingTab)
           .onChange(async (value) => {
             this.plugin.settings.focusExistingTab = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Follow active file')
+      .setDesc(
+        'Collapse the folder tree to the active file’s path when a file is opened. Turn off to keep folders open as you navigate.',
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.followActiveFile)
+          .onChange(async (value) => {
+            this.plugin.settings.followActiveFile = value;
             await this.plugin.saveSettings();
           }),
       );

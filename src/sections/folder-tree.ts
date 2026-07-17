@@ -33,3 +33,16 @@ export function ancestorFolderPaths(path: string): string[] {
   }
   return out;
 }
+
+/**
+ * Follow-mode expansion state: exactly the ancestor chain of `filePath`.
+ * Returns null when `current` already equals that chain as a set, so the
+ * caller can skip the save + re-render (same-file re-focus no-op).
+ * Both arrays are assumed duplicate-free (ancestor chains are duplicate-free
+ * by construction; expansion state never accumulates duplicates).
+ */
+export function followExpandedFolders(current: string[], filePath: string): string[] | null {
+  const next = ancestorFolderPaths(filePath);
+  const same = next.length === current.length && next.every((p) => current.includes(p));
+  return same ? null : next;
+}
