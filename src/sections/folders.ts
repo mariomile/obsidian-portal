@@ -1,7 +1,7 @@
 import { TFile, TFolder, setIcon } from 'obsidian';
 import type { TAbstractFile } from 'obsidian';
 import type { PortalContext } from '../types';
-import { ancestorFolderPaths } from './folder-tree.ts';
+import { ancestorFolderPaths, followExpandedFolders } from './folder-tree.ts';
 import { fileIcon } from './file-icon.ts';
 import { makeDraggable, makeDropTarget } from '../nav/dnd';
 
@@ -398,17 +398,26 @@ export class FoldersSection {
   reveal(file: TFile): void {
     this.cursorPath = file.path;
     this.keyboardCursorVisible = false;
-    const expanded = this.ctx.settings.expandedFolders;
-    let changed = false;
-    for (const ancestor of ancestorFolderPaths(file.path)) {
-      if (!expanded.includes(ancestor)) {
-        expanded.push(ancestor);
-        changed = true;
+    if (this.ctx.settings.followActiveFile) {
+      const next = followExpandedFolders(this.ctx.settings.expandedFolders, file.path);
+      if (next) {
+        this.ctx.settings.expandedFolders = next;
+        void this.ctx.saveSettings();
+        this.render();
       }
-    }
-    if (changed) {
-      void this.ctx.saveSettings();
-      this.render();
+    } else {
+      const expanded = this.ctx.settings.expandedFolders;
+      let changed = false;
+      for (const ancestor of ancestorFolderPaths(file.path)) {
+        if (!expanded.includes(ancestor)) {
+          expanded.push(ancestor);
+          changed = true;
+        }
+      }
+      if (changed) {
+        void this.ctx.saveSettings();
+        this.render();
+      }
     }
 
     for (const active of Array.from(this.containerEl.querySelectorAll('.portal-file.is-active'))) {
