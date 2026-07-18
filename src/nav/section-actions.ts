@@ -9,6 +9,7 @@ import {
   type TAbstractFile,
 } from 'obsidian';
 import { executeCommand } from '../obsidian-internals';
+import { addTagToFrontmatter } from './frontmatter-tags';
 
 class PinItemModal extends FuzzySuggestModal<TAbstractFile> {
   constructor(app: App, private readonly onChoose: (path: string) => void) {
@@ -74,16 +75,9 @@ class CreateTagModal extends Modal {
       return;
     }
 
-    await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
-      const current = frontmatter.tags;
-      const tags = Array.isArray(current)
-        ? current.filter((item): item is string => typeof item === 'string')
-        : typeof current === 'string' && current.trim()
-          ? [current]
-          : [];
-      if (!tags.some((item) => item.replace(/^#/, '') === tag)) tags.push(tag);
-      frontmatter.tags = tags;
-    });
+    // Raw-text patch instead of processFrontMatter: the latter re-serializes
+    // the whole block and mangles unquoted wikilinks (company: [[Acme]]).
+    await this.app.vault.process(file, (content) => addTagToFrontmatter(content, tag) ?? content);
     new Notice(`Created tag #${tag}`);
     this.close();
   }
