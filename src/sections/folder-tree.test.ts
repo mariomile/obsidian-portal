@@ -36,8 +36,8 @@ test('compareEntries orders numeric names naturally', () => {
 
 test('followExpandedFolders replaces state with the active file ancestor chain', () => {
   assert.deepEqual(
-    followExpandedFolders(['Atlas', 'Atlas/People', 'Journal'], 'Active/Projects/Captoo.io/note.md'),
-    ['Active', 'Active/Projects', 'Active/Projects/Captoo.io'],
+    followExpandedFolders(['Atlas', 'Atlas/People', 'Journal'], 'Active/Projects/Acme Corp/note.md'),
+    ['Active', 'Active/Projects', 'Active/Projects/Acme Corp'],
   );
 });
 

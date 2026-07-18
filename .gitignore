@@ -6,3 +6,4 @@ main.js
 
 # Local dev deploy target (your vault path stays out of git)
 .obsidian-plugin-dir
+docs/superpowers/
