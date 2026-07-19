@@ -4,6 +4,8 @@ Portal is a Craft-style unified navigator for Obsidian. It replaces the plain fi
 
 When Portal is enabled it becomes the primary left-sidebar surface and hides the native file explorer (reversible from settings — the core plugin is only CSS-hidden, never detached, so "reveal in file explorer" and other plugins keep working).
 
+Part of the marioverse Obsidian plugin suite.
+
 ## Features
 
 - **One unified rail**: a fixed nav block (New document · All Docs · Tasks · Calendar, each delegating to the relevant suite plugin), then **Pinned · Bookmarks · Recent · Folders · Tags · Collections** — every section collapsible and persisted.
