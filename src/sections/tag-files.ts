@@ -6,9 +6,10 @@ interface TaggedFile {
 }
 
 /** Files carrying `fullTag` exactly (inline tags + frontmatter `tags`). */
-export function filesForTag(app: App, fullTag: string): TaggedFile[] {
+export function filesForTag(app: App, fullTag: string, limit = 100): TaggedFile[] {
   const target = fullTag.replace(/^#/, '');
   const out: TaggedFile[] = [];
+  const cap = Math.max(1, Math.min(limit, 500));
 
   for (const file of app.vault.getMarkdownFiles()) {
     const cache = app.metadataCache.getFileCache(file);
@@ -23,7 +24,10 @@ export function filesForTag(app: App, fullTag: string): TaggedFile[] {
       for (const t of fmTags) if (typeof t === 'string') tags.add(t.replace(/^#/, ''));
     }
 
-    if (tags.has(target)) out.push({ path: file.path, basename: file.basename });
+    if (tags.has(target)) {
+      out.push({ path: file.path, basename: file.basename });
+      if (out.length >= cap) break;
+    }
   }
 
   out.sort((a, b) =>

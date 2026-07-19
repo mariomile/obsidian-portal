@@ -19,16 +19,18 @@ export class CollectionsSection {
   private readonly ctx: PortalContext;
   private readonly containerEl: HTMLElement;
   private readonly expanded = new Set<string>();
+  private lastSignature = '';
 
   constructor(ctx: PortalContext, containerEl: HTMLElement) {
     this.ctx = ctx;
     this.containerEl = containerEl;
   }
 
-  render(): void {
-    this.containerEl.empty();
-
+  render(force = false): void {
     if (!isSuperbasetagsPresent(this.ctx.app)) {
+      if (!force && this.lastSignature === 'absent') return;
+      this.lastSignature = 'absent';
+      this.containerEl.empty();
       this.containerEl.createDiv({
         cls: 'portal-empty',
         text: 'SuperBaseTags not installed',
@@ -37,6 +39,10 @@ export class CollectionsSection {
     }
 
     const collections = getCollections(this.ctx.app);
+    const signature = JSON.stringify(collections);
+    if (!force && signature === this.lastSignature) return;
+    this.lastSignature = signature;
+    this.containerEl.empty();
     if (collections.length === 0) {
       this.containerEl.createDiv({ cls: 'portal-empty', text: 'No collections' });
       return;
@@ -90,6 +96,6 @@ export class CollectionsSection {
   private toggle(tag: string): void {
     if (this.expanded.has(tag)) this.expanded.delete(tag);
     else this.expanded.add(tag);
-    this.render();
+    this.render(true);
   }
 }

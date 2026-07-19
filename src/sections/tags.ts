@@ -14,20 +14,24 @@ export class TagsSection {
   private readonly ctx: PortalContext;
   private readonly containerEl: HTMLElement;
   private readonly expanded = new Set<string>();
+  private lastSignature = '';
 
   constructor(ctx: PortalContext, containerEl: HTMLElement) {
     this.ctx = ctx;
     this.containerEl = containerEl;
   }
 
-  render(): void {
-    this.containerEl.empty();
+  render(force = false): void {
     const raw = getVaultTags(this.ctx.app);
     const source = this.ctx.settings.hideHexTags
       ? Object.fromEntries(
           Object.entries(raw).filter(([tag]) => !isLikelyHexColor(tag)),
         )
       : raw;
+    const signature = JSON.stringify(source);
+    if (!force && signature === this.lastSignature) return;
+    this.lastSignature = signature;
+    this.containerEl.empty();
     const tree = buildTagTree(source);
     if (tree.length === 0) {
       this.containerEl.createDiv({ cls: 'portal-empty', text: 'No tags' });
@@ -76,6 +80,6 @@ export class TagsSection {
   private toggle(fullTag: string): void {
     if (this.expanded.has(fullTag)) this.expanded.delete(fullTag);
     else this.expanded.add(fullTag);
-    this.render();
+    this.render(true);
   }
 }

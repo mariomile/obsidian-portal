@@ -80,7 +80,7 @@ export default class PortalPlugin extends Plugin {
   refreshRail(): void {
     for (const leaf of this.app.workspace.getLeavesOfType(PORTAL_VIEW_TYPE)) {
       const view = leaf.view;
-      if (view instanceof PortalView) void view.onOpen();
+      if (view instanceof PortalView) view.reload();
     }
   }
 

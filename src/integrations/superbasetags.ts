@@ -22,6 +22,7 @@ interface SuperbasetagsPlugin {
 
 const SUPERBASETAGS_ID = 'superbasetags';
 const APPLY_COMMAND = 'superbasetags:apply-to-current';
+const PORTAL_MEMBER_LIMIT = 100;
 
 export interface Collection {
   tag: string;
@@ -69,7 +70,7 @@ export function getCollectionMembers(app: App, tag: string): CollectionMember[] 
   if (!registry?.membersOf) return [];
   try {
     return registry
-      .membersOf(tag)
+      .membersOf(tag, PORTAL_MEMBER_LIMIT)
       .filter((f): f is TFile => f instanceof TFile)
       .map((f) => ({ path: f.path, basename: f.basename }));
   } catch {

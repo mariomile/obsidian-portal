@@ -1,4 +1,4 @@
-import { ItemView, Menu, TFile, debounce, setIcon } from 'obsidian';
+import { Component, ItemView, Menu, TFile, debounce, setIcon } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import type { SortMode } from './settings';
 import type { PortalContext } from './types';
@@ -41,6 +41,7 @@ export class PortalView extends ItemView {
   private pinned: PinnedSection | null = null;
   private recent: RecentSection | null = null;
   private bookmarks: BookmarksSection | null = null;
+  private renderScope: Component | null = null;
 
   constructor(leaf: WorkspaceLeaf, ctx: PortalContext) {
     super(leaf);
@@ -60,6 +61,22 @@ export class PortalView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
+    this.reload();
+  }
+
+  /** Settings-driven, idempotent rebuild without re-entering the view lifecycle. */
+  reload(): void {
+    this.clearRenderScope();
+    const scope = new Component();
+    this.addChild(scope);
+    this.renderScope = scope;
+
+    this.folders = null;
+    this.tags = null;
+    this.collections = null;
+    this.pinned = null;
+    this.recent = null;
+    this.bookmarks = null;
     this.contentEl.empty();
     this.contentEl.addClass('portal-rail');
 
@@ -76,7 +93,7 @@ export class PortalView extends ItemView {
     mountNavBlock(this.app, scrollEl);
 
     // Delegated context menu (U8): any row carrying a data-path opens the menu.
-    this.registerDomEvent(this.contentEl, 'contextmenu', (event: MouseEvent) => {
+    scope.registerDomEvent(this.contentEl, 'contextmenu', (event: MouseEvent) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
       const row = target.closest('[data-path]');
@@ -98,7 +115,7 @@ export class PortalView extends ItemView {
     // Deduped by path so a stationary cursor over sliding content (e.g. during
     // the sidebar animation) doesn't re-fire the preview every frame.
     let lastHoverPath = '';
-    this.registerDomEvent(this.contentEl, 'mouseover', (event: MouseEvent) => {
+    scope.registerDomEvent(this.contentEl, 'mouseover', (event: MouseEvent) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
       const row = target.closest('[data-path]');
@@ -174,13 +191,13 @@ export class PortalView extends ItemView {
 
       // Keyboard navigation: arrows move/expand/collapse, Enter opens/toggles.
       foldersBody.setAttribute('tabindex', '0');
-      this.registerDomEvent(foldersBody, 'keydown', (event: KeyboardEvent) => {
+      scope.registerDomEvent(foldersBody, 'keydown', (event: KeyboardEvent) => {
         this.folders?.handleKey(event);
       });
-      this.registerDomEvent(foldersBody, 'pointerdown', () => {
+      scope.registerDomEvent(foldersBody, 'pointerdown', () => {
         this.folders?.clearKeyboardCursor();
       });
-      this.registerDomEvent(foldersBody, 'focusout', (event: FocusEvent) => {
+      scope.registerDomEvent(foldersBody, 'focusout', (event: FocusEvent) => {
         const next = event.relatedTarget;
         if (!(next instanceof Node) || !foldersBody.contains(next)) {
           this.folders?.clearKeyboardCursor();
@@ -190,11 +207,11 @@ export class PortalView extends ItemView {
       // Debounced re-render coalesces bursts (bulk moves, sync). Registered
       // here (after layout-ready) so the vault-load create storm is already past.
       const rerender = debounce(() => this.folders?.render(), 150, true);
-      this.registerEvent(this.app.vault.on('create', rerender));
-      this.registerEvent(this.app.vault.on('delete', rerender));
-      this.registerEvent(this.app.vault.on('rename', rerender));
+      scope.registerEvent(this.app.vault.on('create', rerender));
+      scope.registerEvent(this.app.vault.on('delete', rerender));
+      scope.registerEvent(this.app.vault.on('rename', rerender));
 
-      this.registerEvent(
+      scope.registerEvent(
         this.app.workspace.on('file-open', (file) => {
           if (file instanceof TFile) this.revealInTree(file.path);
         }),
@@ -221,9 +238,11 @@ export class PortalView extends ItemView {
       const rerenderMeta = debounce(() => {
         this.tags?.render();
         this.collections?.render();
-      }, 300, true);
-      this.registerEvent(this.app.metadataCache.on('changed', rerenderMeta));
-      this.registerEvent(this.app.metadataCache.on('resolved', rerenderMeta));
+      // SuperBaseTags coalesces its own recount at 600 ms. Run after it so the
+      // collection signature observes the new counts in the same event burst.
+      }, 700, true);
+      scope.registerEvent(this.app.metadataCache.on('changed', rerenderMeta));
+      scope.registerEvent(this.app.metadataCache.on('resolved', rerenderMeta));
     }
 
     const pinnedBody = bodies.get('pinned');
@@ -240,8 +259,14 @@ export class PortalView extends ItemView {
     if (recentBody) {
       this.recent = new RecentSection(this.ctx, recentBody);
       this.recent.render();
-      this.registerEvent(this.app.workspace.on('file-open', () => this.recent?.render()));
+      scope.registerEvent(this.app.workspace.on('file-open', () => this.recent?.render()));
     }
+  }
+
+  private clearRenderScope(): void {
+    if (!this.renderScope) return;
+    this.removeChild(this.renderScope);
+    this.renderScope = null;
   }
 
   /** Fold/unfold a rail section, persisting the choice so it survives reloads.
@@ -370,6 +395,7 @@ export class PortalView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.clearRenderScope();
     this.folders = null;
     this.tags = null;
     this.collections = null;
