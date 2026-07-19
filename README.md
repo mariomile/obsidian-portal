@@ -6,6 +6,11 @@ When Portal is enabled it becomes the primary left-sidebar surface and hides the
 
 Part of the marioverse Obsidian plugin suite.
 
+<p align="center">
+  <img src="docs/rail.png" width="900" alt="Portal — the unified sidebar rail" />
+</p>
+<p align="center"><em>Pinned, Bookmarks, Recent, Folders, Tags and Collections in one quiet rail.</em></p>
+
 ## Features
 
 - **One unified rail**: a fixed nav block (New document · All Docs · Tasks · Calendar, each delegating to the relevant suite plugin), then **Pinned · Bookmarks · Recent · Folders · Tags · Collections** — every section collapsible and persisted.
