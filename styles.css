@@ -183,20 +183,22 @@
   outline: none;
 }
 
-/* Per-row leaf icon (folder / file / #tag), left of the label. */
+/* Per-row leaf icon (folder / file / #tag), left of the label. Sized off
+   Obsidian's own --icon-size so it matches native icons (nav buttons,
+   Iconize-assigned icons) 1:1 instead of an arbitrary close-but-off value. */
 .portal-row-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 17px;
-  height: 17px;
+  width: var(--icon-size, 16px);
+  height: var(--icon-size, 16px);
   color: var(--text-muted);
   transition: color var(--portal-motion);
 }
 .portal-row-icon svg {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-size, 16px);
+  height: var(--icon-size, 16px);
 }
 .portal-tree-row:hover .portal-row-icon {
   color: var(--text-normal);
