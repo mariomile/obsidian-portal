@@ -312,9 +312,13 @@ export class FoldersSection {
     zone: 'before' | 'after',
   ): Promise<void> {
     if (srcPath === targetPath) return;
+    const root = this.ctx.app.vault.getRoot();
     const src = this.ctx.app.vault.getAbstractFileByPath(srcPath);
-    if (!(src instanceof TFolder) || src.parent?.path !== '') return;
-    const current = this.rootFolderOrder(this.ctx.app.vault.getRoot());
+    // Obsidian's root folder path is "/", not "" — compare against the real
+    // root, not a hardcoded sentinel (that mismatch silently no-op'd every
+    // reorder before this fix).
+    if (!(src instanceof TFolder) || src.parent?.path !== root.path) return;
+    const current = this.rootFolderOrder(root);
     const next = current.filter((p) => p !== srcPath);
     const idx = next.indexOf(targetPath);
     if (idx === -1) return;
