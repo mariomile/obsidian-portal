@@ -3,7 +3,28 @@ import type { TAbstractFile } from 'obsidian';
 import type { PortalContext } from '../types';
 import { ancestorFolderPaths, followExpandedFolders } from './folder-tree.ts';
 import { fileIcon } from './file-icon.ts';
-import { makeDraggable, makeDropTarget } from '../nav/dnd';
+import { makeDraggable, makeDropTarget, makeReorderableDropTarget, moveInto } from '../nav/dnd';
+import { getIconizeAssignment, renderIconizeIcon } from '../obsidian-internals';
+
+/** Render `decor.icon` if set (Portal's own frontmatter override — most
+ *  specific, wins); else an Iconize (`obsidian-icon-folder`) assignment for
+ *  `path`, via Iconize's own render path so custom-pack SVGs work; else
+ *  `fallback` (a native Lucide icon name). */
+function setRowIcon(
+  app: PortalContext['app'],
+  el: HTMLElement,
+  decor: Decor,
+  path: string,
+  fallback: string,
+): void {
+  if (decor.icon) {
+    setIcon(el, decor.icon);
+    return;
+  }
+  const iconizeId = getIconizeAssignment(app, path);
+  if (iconizeId && renderIconizeIcon(app, iconizeId, el)) return;
+  setIcon(el, fallback);
+}
 
 interface Decor {
   icon?: string;
@@ -227,7 +248,12 @@ export class FoldersSection {
     depth: number,
     filter: Filter | null,
   ): void {
-    const sorted = [...folder.children].sort((a, b) => this.compareChildren(a, b));
+    // Root's direct children respect manual folder order (task: drag-reorder);
+    // everything deeper keeps the plain alpha/modified/created sort.
+    const sorted =
+      depth === 0
+        ? this.sortRootChildren(folder)
+        : [...folder.children].sort((a, b) => this.compareChildren(a, b));
     for (const child of sorted) {
       if (child instanceof TFolder) {
         if (!filter || filter.show.has(child.path)) {
@@ -239,6 +265,63 @@ export class FoldersSection {
         }
       }
     }
+  }
+
+  /** Root folders in `folderOrder` first (drag-reorder), any folder not yet
+   *  in that list falls back to alpha order after the ones that are; files
+   *  keep the regular sort mode. `folderOrder` is read-only here — it's
+   *  seeded/written only by `reorderRootFolder`, never by rendering. */
+  private sortRootChildren(root: TFolder): TAbstractFile[] {
+    const byPath = new Map(
+      root.children
+        .filter((c): c is TFolder => c instanceof TFolder)
+        .map((f) => [f.path, f] as const),
+    );
+    const folders = this.rootFolderOrder(root)
+      .map((p) => byPath.get(p))
+      .filter((f): f is TFolder => Boolean(f));
+    const files = root.children
+      .filter((c): c is TFile => c instanceof TFile)
+      .sort((a, b) => this.compareChildren(a, b));
+    return [...folders, ...files];
+  }
+
+  /** Effective root-folder paths in render order: `folderOrder` entries
+   *  first (only the ones that still exist), then any folder Portal hasn't
+   *  learned an explicit position for yet, alpha-sorted. */
+  private rootFolderOrder(root: TFolder): string[] {
+    const rootFolders = root.children.filter((c): c is TFolder => c instanceof TFolder);
+    const alpha = (list: TFolder[]): string[] =>
+      [...list]
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
+        .map((f) => f.path);
+    const order = this.ctx.settings.folderOrder;
+    if (order.length === 0) return alpha(rootFolders);
+    const known = new Set(rootFolders.map((f) => f.path));
+    const ordered = order.filter((p) => known.has(p));
+    const missing = alpha(rootFolders.filter((f) => !ordered.includes(f.path)));
+    return [...ordered, ...missing];
+  }
+
+  /** Move `srcPath` (a root folder) to just before/after `targetPath` in the
+   *  manual order — seeds `folderOrder` from the current effective order on
+   *  first use, so a fresh vault's alpha order is preserved as the base. */
+  private async reorderRootFolder(
+    srcPath: string,
+    targetPath: string,
+    zone: 'before' | 'after',
+  ): Promise<void> {
+    if (srcPath === targetPath) return;
+    const src = this.ctx.app.vault.getAbstractFileByPath(srcPath);
+    if (!(src instanceof TFolder) || src.parent?.path !== '') return;
+    const current = this.rootFolderOrder(this.ctx.app.vault.getRoot());
+    const next = current.filter((p) => p !== srcPath);
+    const idx = next.indexOf(targetPath);
+    if (idx === -1) return;
+    next.splice(zone === 'after' ? idx + 1 : idx, 0, srcPath);
+    this.ctx.settings.folderOrder = next;
+    await this.ctx.saveSettings();
+    this.render();
   }
 
   /** Folders first (by name); files by the chosen sort mode. */
@@ -290,7 +373,7 @@ export class FoldersSection {
     setIcon(twisty, expanded ? 'chevron-down' : 'chevron-right');
     const decor = this.decorFor(folder);
     const icon = row.createSpan({ cls: 'portal-row-icon' });
-    setIcon(icon, decor.icon ?? (expanded ? 'folder-open' : 'folder'));
+    setRowIcon(this.ctx.app, icon, decor, folder.path, expanded ? 'folder-open' : 'folder');
     if (decor.color) icon.style.color = decor.color;
     row.createSpan({ cls: 'portal-label', text: folder.name });
     row.createSpan({ cls: 'portal-count', text: String(folder.children.length) });
@@ -300,7 +383,20 @@ export class FoldersSection {
       void this.toggleFolder(folder.path);
     });
     makeDraggable(row, folder.path);
-    makeDropTarget(row, folder.path, this.ctx.app, () => this.render());
+    // Root folders get before/after drop zones for manual reordering, on top
+    // of the regular "drop into" move; nested folders keep move-only (scope:
+    // "at least the top level" — deeper reordering wasn't asked for).
+    if (depth === 0 && !filter) {
+      makeReorderableDropTarget(row, (srcPath, zone) => {
+        if (zone === 'into') {
+          void moveInto(this.ctx.app, srcPath, folder.path, () => this.render());
+        } else {
+          void this.reorderRootFolder(srcPath, folder.path, zone);
+        }
+      });
+    } else {
+      makeDropTarget(row, folder.path, this.ctx.app, () => this.render());
+    }
 
     // Lazy: children mount only when the folder is expanded, so a large vault
     // never renders thousands of rows at once.
@@ -318,7 +414,7 @@ export class FoldersSection {
     row.createSpan({ cls: 'portal-twisty portal-twisty-empty' });
     const decor = this.decorFor(file);
     const icon = row.createSpan({ cls: 'portal-row-icon' });
-    setIcon(icon, decor.icon ?? fileIcon(file.extension));
+    setRowIcon(this.ctx.app, icon, decor, file.path, fileIcon(file.extension));
     if (decor.color) icon.style.color = decor.color;
     const label = file.extension === 'md' ? file.basename : file.name;
     row.createSpan({ cls: 'portal-label', text: label });
@@ -396,8 +492,10 @@ export class FoldersSection {
   }
 
   /**
-   * Align expansion to `file`'s ancestor path (follow mode) or expand
-   * ancestors additively (legacy), then highlight + scroll its row into view.
+   * Called on every file-open. Follow mode on: collapse the tree to exactly
+   * `file`'s ancestor path. Follow mode off: don't touch expansion at all —
+   * only highlight the row if it's already visible. Use `revealFull` for an
+   * explicit "show me the whole path" action.
    */
   reveal(file: TFile): void {
     this.cursorPath = file.path;
@@ -409,21 +507,33 @@ export class FoldersSection {
         void this.ctx.saveSettings();
         this.render();
       }
-    } else {
-      const expanded = this.ctx.settings.expandedFolders;
-      let changed = false;
-      for (const ancestor of ancestorFolderPaths(file.path)) {
-        if (!expanded.includes(ancestor)) {
-          expanded.push(ancestor);
-          changed = true;
-        }
-      }
-      if (changed) {
-        void this.ctx.saveSettings();
-        this.render();
+    }
+    this.highlightActive(file);
+  }
+
+  /** Explicit "reveal active file" action: force-expand every ancestor of
+   *  `file`, regardless of follow mode, then highlight + scroll to it. */
+  revealFull(file: TFile): void {
+    this.cursorPath = file.path;
+    this.keyboardCursorVisible = false;
+    const expanded = this.ctx.settings.expandedFolders;
+    let changed = false;
+    for (const ancestor of ancestorFolderPaths(file.path)) {
+      if (!expanded.includes(ancestor)) {
+        expanded.push(ancestor);
+        changed = true;
       }
     }
+    if (changed) {
+      void this.ctx.saveSettings();
+      this.render();
+    }
+    this.highlightActive(file);
+  }
 
+  /** Mark `file`'s row active (only visible effect if its row is currently
+   *  rendered) and scroll it into view. */
+  private highlightActive(file: TFile): void {
     for (const active of Array.from(this.containerEl.querySelectorAll('.portal-file.is-active'))) {
       active.removeClass('is-active');
     }

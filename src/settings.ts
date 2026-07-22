@@ -31,8 +31,14 @@ export interface PortalSettings {
    *  Portal's own). */
   focusExistingTab: boolean;
   /** Follow mode: on file-open the Folders tree collapses to exactly the
-   *  active file's ancestor path. Off → reveals are additive (legacy). */
+   *  active file's ancestor path. Off → file-open never touches expansion;
+   *  the active file is only highlighted if its row is already visible (use
+   *  the toolbar's "Reveal active file" action to force the full path open). */
   followActiveFile: boolean;
+  /** Manual sort order for the vault root's direct child folders (paths).
+   *  Folders not listed here sort alphabetically after the ones that are —
+   *  populated lazily on the first drag-reorder, never written eagerly. */
+  folderOrder: string[];
   /** Rail section keys (lower-cased, e.g. 'tags') that are collapsed. Default
    *  empty → every section starts expanded, so a fresh install never hides a
    *  user's content; a section is added here only when the user folds it. */
@@ -50,7 +56,8 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   pinned: [],
   hideHexTags: true,
   focusExistingTab: true,
-  followActiveFile: true,
+  followActiveFile: false,
+  folderOrder: [],
   collapsedSections: [],
   enabledSections: [...PORTAL_SECTION_KEYS],
   sectionOrder: [...PORTAL_SECTION_KEYS],
@@ -86,6 +93,7 @@ export function parseSettings(raw: unknown): PortalSettings {
       typeof data.followActiveFile === 'boolean'
         ? data.followActiveFile
         : DEFAULT_SETTINGS.followActiveFile,
+    folderOrder: asStringArray(data.folderOrder, DEFAULT_SETTINGS.folderOrder),
     collapsedSections: asStringArray(data.collapsedSections, DEFAULT_SETTINGS.collapsedSections),
     enabledSections: parseEnabledSections(data.enabledSections),
     sectionOrder: parseSectionOrder(data.sectionOrder),
@@ -137,7 +145,7 @@ export class PortalSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Follow active file')
       .setDesc(
-        'Collapse the folder tree to the active file’s path when a file is opened. Turn off to keep folders open as you navigate.',
+        'On: collapse the folder tree to the active file’s path when you open a note. Off: the tree stays as you left it — use the toolbar’s "Reveal active file" button to open the full path on demand.',
       )
       .addToggle((toggle) =>
         toggle

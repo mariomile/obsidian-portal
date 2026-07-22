@@ -8,6 +8,7 @@ export interface ToolbarActions {
   shouldCollapseFolders(): boolean;
   toggleAllFolders(): Promise<void>;
   changeSort(event: MouseEvent): void;
+  revealActive(): void;
 }
 
 /** File-manager toolbar using Obsidian's native DOM classes and theme states. */
@@ -35,6 +36,9 @@ export function mountToolbar(containerEl: HTMLElement, actions: ToolbarActions):
   button('square-pen', 'New note', () => actions.newNote());
   button('folder-plus', 'New folder', () => actions.newFolder());
   button('arrow-up-narrow-wide', 'Change sort order', (event) => actions.changeSort(event));
+  // Follow mode off leaves the tree as-is on file-open; this is the on-demand
+  // escape hatch to see the active file's full path.
+  button('locate-fixed', 'Reveal active file', () => actions.revealActive());
   const searchButton = button('search', 'Search notes', () => {
     const open = actions.toggleSearch();
     searchButton.setAttribute('aria-pressed', String(open));

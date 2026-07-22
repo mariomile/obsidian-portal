@@ -15,6 +15,9 @@ interface SonarPlugin {
 export interface JumpHit {
   path: string;
   basename: string;
+  /** Sonar only indexes notes, so every hit it returns is a file. Folder
+   *  hits are added separately in `jump.ts` (Sonar isn't folder-aware). */
+  isFolder: boolean;
 }
 
 const SONAR_ID = 'sonar';
@@ -29,7 +32,7 @@ export async function sonarQuery(app: App, raw: string, limit = 20): Promise<Jum
   if (!service) return [];
   try {
     const hits = await service.query(raw, { limit });
-    return hits.map((h) => ({ path: h.path, basename: h.basename }));
+    return hits.map((h) => ({ path: h.path, basename: h.basename, isFolder: false }));
   } catch {
     return [];
   }

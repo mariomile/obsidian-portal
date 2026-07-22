@@ -1,4 +1,4 @@
-import { Component, ItemView, Menu, TFile, debounce, setIcon } from 'obsidian';
+import { Component, ItemView, Menu, TFile, TFolder, debounce, setIcon } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import type { SortMode } from './settings';
 import type { PortalContext } from './types';
@@ -85,6 +85,7 @@ export class PortalView extends ItemView {
     const jump = new JumpInput(
       this.ctx,
       (path) => this.revealInTree(path),
+      (path) => this.revealFolderInTree(path),
     );
     mountToolbar(this.contentEl, this.toolbarActions(jump));
     const scrollEl = this.contentEl.createDiv({ cls: 'portal-rail-scroll' });
@@ -316,6 +317,12 @@ export class PortalView extends ItemView {
         }
       },
       changeSort: (event) => this.showSortMenu(event),
+      revealActive: () => {
+        const active = this.app.workspace.getActiveFile();
+        if (!active) return;
+        this.expandSection('folders');
+        this.folders?.revealFull(active);
+      },
     };
   }
 
@@ -377,6 +384,16 @@ export class PortalView extends ItemView {
     if (!(file instanceof TFile)) return;
     this.expandSection('folders');
     this.folders?.reveal(file);
+  }
+
+  /** Search (jump) can also match folders (task: "cerca deve trovare anche
+   *  folder"); a folder hit has nothing to open, so expand the tree down to
+   *  it instead. */
+  private revealFolderInTree(path: string): void {
+    const folder = this.app.vault.getAbstractFileByPath(path);
+    if (!(folder instanceof TFolder)) return;
+    this.expandSection('folders');
+    this.folders?.expandTo(folder.path);
   }
 
   /** Ensure a rail section is expanded (persist the change). */

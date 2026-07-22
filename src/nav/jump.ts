@@ -1,17 +1,20 @@
-import { TFile, debounce } from 'obsidian';
+import { TFile, debounce, setIcon } from 'obsidian';
 import type { PortalContext } from '../types';
 import { isSonarPresent, sonarQuery, type JumpHit } from '../integrations/sonar';
 
 const FALLBACK_LIMIT = 20;
 
 /**
- * Secondary note search, revealed from the toolbar. Ranked results come from
- * Sonar's in-process query when present; otherwise a plain substring search
- * over vault files. Enter opens the top hit; click opens a specific one.
+ * Secondary note+folder search, revealed from the toolbar. Ranked note
+ * results come from Sonar's in-process query when present; otherwise a plain
+ * substring search over vault files. Sonar only indexes notes, so folder
+ * matches are always found separately and merged in. Enter opens/reveals the
+ * top hit; click does the same for a specific one.
  */
 export class JumpInput {
   private readonly ctx: PortalContext;
   private readonly onReveal: (path: string) => void;
+  private readonly onRevealFolder: (path: string) => void;
   private wrapEl: HTMLElement | null = null;
   private inputEl: HTMLInputElement | null = null;
   private resultsEl: HTMLElement | null = null;
@@ -19,9 +22,11 @@ export class JumpInput {
   constructor(
     ctx: PortalContext,
     onReveal: (path: string) => void,
+    onRevealFolder: (path: string) => void,
   ) {
     this.ctx = ctx;
     this.onReveal = onReveal;
+    this.onRevealFolder = onRevealFolder;
   }
 
   mount(containerEl: HTMLElement): void {
@@ -31,8 +36,8 @@ export class JumpInput {
       cls: 'portal-jump-input',
       attr: {
         type: 'search',
-        placeholder: isSonarPresent(this.ctx.app) ? 'Search with Sonar…' : 'Search notes…',
-        'aria-label': 'Search notes',
+        placeholder: isSonarPresent(this.ctx.app) ? 'Search with Sonar…' : 'Search notes and folders…',
+        'aria-label': 'Search notes and folders',
       },
     });
     this.resultsEl = wrap.createDiv({ cls: 'portal-jump-results' });
@@ -75,45 +80,70 @@ export class JumpInput {
     results.empty();
     if (!query) return;
 
-    const hits = isSonarPresent(this.ctx.app)
+    const noteHits = isSonarPresent(this.ctx.app)
       ? await sonarQuery(this.ctx.app, query, FALLBACK_LIMIT)
-      : this.fallback(query);
+      : this.fallbackFiles(query);
+    const folderHits = this.fallbackFolders(query);
+    // Folders first — they're the rarer, more deliberate match when typed.
+    const hits = [...folderHits, ...noteHits].slice(0, FALLBACK_LIMIT);
 
     for (const hit of hits) {
       const row = results.createDiv({ cls: 'portal-jump-hit' });
+      row.toggleClass('is-folder', hit.isFolder);
       row.dataset.path = hit.path;
-      row.createDiv({ cls: 'portal-jump-title', text: hit.basename });
-      // Show WHERE the file lives so the result is unambiguous.
+      row.dataset.isFolder = hit.isFolder ? '1' : '';
+      const icon = row.createSpan({ cls: 'portal-jump-icon' });
+      setIcon(icon, hit.isFolder ? 'folder' : 'file');
+      const text = row.createDiv({ cls: 'portal-jump-text' });
+      text.createDiv({ cls: 'portal-jump-title', text: hit.basename });
+      // Show WHERE the file/folder lives so the result is unambiguous.
       const parent = hit.path.includes('/')
         ? hit.path.slice(0, hit.path.lastIndexOf('/'))
         : '';
-      row.createDiv({ cls: 'portal-jump-path', text: parent || 'vault root' });
-      row.addEventListener('click', () => this.open(hit.path));
+      text.createDiv({ cls: 'portal-jump-path', text: parent || 'vault root' });
+      row.addEventListener('click', () => this.open(hit));
     }
   }
 
-  private fallback(query: string): JumpHit[] {
+  private fallbackFiles(query: string): JumpHit[] {
     const lower = query.toLowerCase();
     return this.ctx.app.vault
       .getFiles()
       .filter((f) => f.basename.toLowerCase().includes(lower))
       .slice(0, FALLBACK_LIMIT)
-      .map((f) => ({ path: f.path, basename: f.basename }));
+      .map((f) => ({ path: f.path, basename: f.basename, isFolder: false }));
+  }
+
+  private fallbackFolders(query: string): JumpHit[] {
+    const lower = query.toLowerCase();
+    return this.ctx.app.vault
+      .getAllFolders()
+      .filter((f) => f.name.toLowerCase().includes(lower))
+      .slice(0, FALLBACK_LIMIT)
+      .map((f) => ({ path: f.path, basename: f.name, isFolder: true }));
   }
 
   private openTop(): void {
-    const first = this.resultsEl?.querySelector('.portal-jump-hit');
-    if (first instanceof HTMLElement && first.dataset.path) {
-      this.open(first.dataset.path);
-    }
+    const first = this.resultsEl?.querySelector<HTMLElement>('.portal-jump-hit');
+    if (!first?.dataset.path) return;
+    this.open({
+      path: first.dataset.path,
+      basename: '',
+      isFolder: first.dataset.isFolder === '1',
+    });
   }
 
-  private open(path: string): void {
-    const file = this.ctx.app.vault.getAbstractFileByPath(path);
+  private open(hit: JumpHit): void {
+    if (hit.isFolder) {
+      this.onRevealFolder(hit.path);
+      this.setOpen(false);
+      return;
+    }
+    const file = this.ctx.app.vault.getAbstractFileByPath(hit.path);
     if (file instanceof TFile) {
       void this.ctx.app.workspace.getLeaf(false).openFile(file);
       // Highlight where the file lives in the Folders tree.
-      this.onReveal(path);
+      this.onReveal(hit.path);
       this.setOpen(false);
     }
   }

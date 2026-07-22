@@ -68,6 +68,38 @@ export function executeCommand(app: App, id: string): boolean {
     : false;
 }
 
+interface IconizeApi {
+  setIconForNode(iconName: string, node: HTMLElement): unknown;
+}
+interface IconizeAssignmentValue {
+  icon: string;
+}
+interface IconizePluginInstance {
+  api?: IconizeApi;
+  getData?: () => Record<string, string | IconizeAssignmentValue>;
+}
+
+/** Iconize's (`obsidian-icon-folder`) per-path icon assignment, if any — read
+ *  the same way superbasetags' registry is read: runtime instance access,
+ *  never touching Iconize's own files. Value is a plain icon id string, or
+ *  `{ icon, iconColor }` when the user set a custom color in Iconize. */
+export function getIconizeAssignment(app: App, path: string): string | undefined {
+  const plugin = getPlugin<IconizePluginInstance>(app, 'obsidian-icon-folder');
+  const value = plugin?.getData?.()[path];
+  if (!value) return undefined;
+  return typeof value === 'string' ? value : value.icon;
+}
+
+/** Render an Iconize-assigned icon into `node` via Iconize's own insertion
+ *  path (so custom-pack SVGs — not just Lucide names — render correctly).
+ *  Returns false if Iconize isn't installed or its `.api` isn't ready yet. */
+export function renderIconizeIcon(app: App, iconName: string, node: HTMLElement): boolean {
+  const plugin = getPlugin<IconizePluginInstance>(app, 'obsidian-icon-folder');
+  if (!plugin?.api?.setIconForNode) return false;
+  plugin.api.setIconForNode(iconName, node);
+  return true;
+}
+
 interface BookmarkItem {
   type: string;
   path?: string;
