@@ -92,12 +92,21 @@ export function getIconizeAssignment(app: App, path: string): string | undefined
 
 /** Render an Iconize-assigned icon into `node` via Iconize's own insertion
  *  path (so custom-pack SVGs — not just Lucide names — render correctly).
- *  Returns false if Iconize isn't installed or its `.api` isn't ready yet. */
+ *  Returns false if Iconize isn't installed, its `.api` isn't ready yet, or
+ *  the icon isn't in Iconize's in-memory cache yet — at startup Iconize loads
+ *  custom pack SVGs asynchronously (un-awaited file reads), and a lookup miss
+ *  makes `setIconForNode` insert the literal icon id ("HiRocket01") as text.
+ *  Treat that echo as failure so callers can fall back and retry. */
 export function renderIconizeIcon(app: App, iconName: string, node: HTMLElement): boolean {
   const plugin = getPlugin<IconizePluginInstance>(app, 'obsidian-icon-folder');
   if (!plugin?.api?.setIconForNode) return false;
   plugin.api.setIconForNode(iconName, node);
-  return true;
+  // Real renders yield an <svg> (packs, Lucide) or emoji text; a miss yields
+  // the raw id (or nothing). Clear the echoed text so it never shows.
+  const text = node.textContent ?? '';
+  const missed = !node.querySelector('svg') && (text === iconName || text.length === 0);
+  if (missed) node.empty();
+  return !missed;
 }
 
 interface BookmarkItem {

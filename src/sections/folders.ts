@@ -9,21 +9,28 @@ import { getIconizeAssignment, renderIconizeIcon } from '../obsidian-internals';
 /** Render `decor.icon` if set (Portal's own frontmatter override — most
  *  specific, wins); else an Iconize (`obsidian-icon-folder`) assignment for
  *  `path`, via Iconize's own render path so custom-pack SVGs work; else
- *  `fallback` (a native Lucide icon name). */
+ *  `fallback` (a native Lucide icon name). Returns true when an Iconize
+ *  assignment exists but couldn't render yet (its async pack load hasn't
+ *  finished at startup) — the caller should schedule a retry render. */
 function setRowIcon(
   app: PortalContext['app'],
   el: HTMLElement,
   decor: Decor,
   path: string,
   fallback: string,
-): void {
+): boolean {
   if (decor.icon) {
     setIcon(el, decor.icon);
-    return;
+    return false;
   }
   const iconizeId = getIconizeAssignment(app, path);
-  if (iconizeId && renderIconizeIcon(app, iconizeId, el)) return;
+  if (!iconizeId) {
+    setIcon(el, fallback);
+    return false;
+  }
+  if (renderIconizeIcon(app, iconizeId, el)) return false;
   setIcon(el, fallback);
+  return true;
 }
 
 interface Decor {
@@ -69,6 +76,7 @@ export class FoldersSection {
   }
 
   render(): void {
+    this.iconRetryNeeded = false;
     this.containerEl.empty();
     // The whole tree accepts drops onto the vault root.
     makeDropTarget(this.containerEl, '', this.ctx.app, () => this.render());
@@ -76,6 +84,28 @@ export class FoldersSection {
     this.renderChildren(this.ctx.app.vault.getRoot(), this.containerEl, 0, filter);
     this.applyCursor();
     this.applySelection();
+    this.scheduleIconRetry();
+  }
+
+  // At startup Iconize loads custom icon packs asynchronously, so rows
+  // rendered before that finishes fall back to Lucide icons. Re-render a few
+  // times until every assigned icon resolves, then stop (or give up quietly —
+  // e.g. an assignment pointing at an icon deleted from the pack).
+  private iconRetryNeeded = false;
+  private iconRetryCount = 0;
+  private iconRetryTimer: number | null = null;
+
+  private scheduleIconRetry(): void {
+    if (!this.iconRetryNeeded) {
+      this.iconRetryCount = 0;
+      return;
+    }
+    if (this.iconRetryCount >= 5 || this.iconRetryTimer !== null) return;
+    this.iconRetryCount += 1;
+    this.iconRetryTimer = window.setTimeout(() => {
+      this.iconRetryTimer = null;
+      this.render();
+    }, 1000);
   }
 
   getSelection(): string[] {
@@ -377,7 +407,8 @@ export class FoldersSection {
     setIcon(twisty, expanded ? 'chevron-down' : 'chevron-right');
     const decor = this.decorFor(folder);
     const icon = row.createSpan({ cls: 'portal-row-icon' });
-    setRowIcon(this.ctx.app, icon, decor, folder.path, expanded ? 'folder-open' : 'folder');
+    if (setRowIcon(this.ctx.app, icon, decor, folder.path, expanded ? 'folder-open' : 'folder'))
+      this.iconRetryNeeded = true;
     if (decor.color) icon.style.color = decor.color;
     row.createSpan({ cls: 'portal-label', text: folder.name });
     row.createSpan({ cls: 'portal-count', text: String(folder.children.length) });
@@ -418,7 +449,8 @@ export class FoldersSection {
     row.createSpan({ cls: 'portal-twisty portal-twisty-empty' });
     const decor = this.decorFor(file);
     const icon = row.createSpan({ cls: 'portal-row-icon' });
-    setRowIcon(this.ctx.app, icon, decor, file.path, fileIcon(file.extension));
+    if (setRowIcon(this.ctx.app, icon, decor, file.path, fileIcon(file.extension)))
+      this.iconRetryNeeded = true;
     if (decor.color) icon.style.color = decor.color;
     const label = file.extension === 'md' ? file.basename : file.name;
     row.createSpan({ cls: 'portal-label', text: label });
