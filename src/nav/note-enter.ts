@@ -12,14 +12,17 @@ const ENTER_CLASS = 'portal-note-enter';
  * DOM, so nothing re-mounts and pure CSS can never re-trigger an animation.
  * The workspace `file-open` event is the reliable navigation signal.
  *
- * Scope: phone only (Platform gate here + `.is-phone` gate in the CSS).
- * The header stays still — only the content animates — so it reads like an
- * iOS push, not a full-screen repaint. Motion is transform+opacity only.
+ * Scope: always on phone; on desktop it is an opt-in taste setting
+ * (`desktopNoteTransition`, default off — fast keyboard navigation can make
+ * a per-file animation tire). The gate lives INSIDE the handler so flipping
+ * the setting applies live, no reload. The header stays still — only the
+ * content animates — so it reads like an iOS push, not a repaint.
+ * Motion is transform+opacity only.
  */
 export function installNoteEnter(plugin: PortalPlugin): void {
-  if (!Platform.isPhone) return;
   plugin.registerEvent(
     plugin.app.workspace.on('file-open', () => {
+      if (!Platform.isPhone && !plugin.settings.desktopNoteTransition) return;
       const view = plugin.app.workspace.getActiveViewOfType(MarkdownView);
       const el = view?.contentEl;
       if (!el) return;

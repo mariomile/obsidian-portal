@@ -457,13 +457,15 @@ body.is-phone .portal-section-header {
   min-height: var(--cosmos-touch-min, 44px);
 }
 
-/* § Note-enter — Craft-style page transition on phone (installNoteEnter).
+/* § Note-enter — Craft-style page transition (installNoteEnter).
  * The nav/note-enter hook replays this on every file-open; pure CSS cannot
  * re-trigger it because same-leaf navigation never re-mounts the view.
  * transform+opacity only (compositor-friendly); header stays still so it
  * reads as an iOS push. Self-contained fallbacks; Cosmos can retune via
- * its motion tokens. Phone-gated twice (Platform in JS, .is-phone here). */
-body.is-phone .portal-note-enter {
+ * its motion tokens. WHEN it fires is the JS gate's job (always on phone,
+ * desktop only behind the desktopNoteTransition setting) — the selector is
+ * device-agnostic on purpose. */
+.portal-note-enter {
   animation: portal-note-enter
     var(--cosmos-t-panel, 260ms)
     var(--cosmos-native, cubic-bezier(0.32, 0.72, 0, 1))
@@ -474,7 +476,7 @@ body.is-phone .portal-note-enter {
   to   { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  body.is-phone .portal-note-enter {
+  .portal-note-enter {
     animation: none;
   }
 }

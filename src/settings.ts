@@ -45,6 +45,10 @@ export interface PortalSettings {
   collapsedSections: string[];
   /** Sections shown in the rail. An explicit empty list hides every section. */
   enabledSections: PortalSectionKey[];
+  /** Desktop-only: replay the note-enter transition (fade + rise) on
+   *  file-open, like on phone. Off by default — with fast keyboard
+   *  navigation a per-file animation can tire; opt-in taste toggle. */
+  desktopNoteTransition: boolean;
   /** Persistent top-to-bottom section order, including hidden sections. */
   sectionOrder: PortalSectionKey[];
 }
@@ -61,6 +65,7 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   collapsedSections: [],
   enabledSections: [...PORTAL_SECTION_KEYS],
   sectionOrder: [...PORTAL_SECTION_KEYS],
+  desktopNoteTransition: false,
 };
 
 const asStringArray = (value: unknown, fallback: string[]): string[] =>
@@ -85,6 +90,10 @@ export function parseSettings(raw: unknown): PortalSettings {
       typeof data.hideHexTags === 'boolean'
         ? data.hideHexTags
         : DEFAULT_SETTINGS.hideHexTags,
+    desktopNoteTransition:
+      typeof data.desktopNoteTransition === 'boolean'
+        ? data.desktopNoteTransition
+        : DEFAULT_SETTINGS.desktopNoteTransition,
     focusExistingTab:
       typeof data.focusExistingTab === 'boolean'
         ? data.focusExistingTab
@@ -138,6 +147,20 @@ export class PortalSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.focusExistingTab)
           .onChange(async (value) => {
             this.plugin.settings.focusExistingTab = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Note transition on desktop')
+      .setDesc(
+        'Replay the phone note-enter transition (fade + rise) when opening files on desktop. Off by default: with fast keyboard navigation a per-file animation can tire.',
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.desktopNoteTransition)
+          .onChange(async (value) => {
+            this.plugin.settings.desktopNoteTransition = value;
             await this.plugin.saveSettings();
           }),
       );
