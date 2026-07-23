@@ -57,7 +57,7 @@ export class PortalView extends ItemView {
   }
 
   getIcon(): string {
-    return 'panel-left';
+    return 'hi-panel-left';
   }
 
   async onOpen(): Promise<void> {

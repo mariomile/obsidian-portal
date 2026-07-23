@@ -1,4 +1,4 @@
-import { Plugin } from 'obsidian';
+import { Plugin, addIcon } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import { installNoteEnter } from './nav/note-enter';
 import { installTabDedupe } from './nav/tab-dedupe';
@@ -9,6 +9,16 @@ import {
   PortalSettingTab,
   type PortalSettings,
 } from './settings';
+
+// Huge Icons (hugeicons.com, free/MIT, Stroke Rounded, 24x24 grid) — same
+// pattern as nav-block.ts's hi-* set. addIcon() always wraps content in a
+// fixed viewBox="0 0 100 100", so a 4.166667x scale (100/24) fills it right.
+addIcon(
+  'hi-panel-left',
+  '<g transform="scale(4.166667)" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">' +
+    '<path d="M13 3h-2C7.229 3 5.343 3 4.172 4.172S3 7.229 3 11v2c0 3.771 0 5.657 1.172 6.828S7.229 21 11 21h2c3.771 0 5.657 0 6.828-1.172S21 16.771 21 13v-2c0-3.771 0-5.657-1.172-6.828S16.771 3 13 3M9 3v18"/>' +
+    '</g>',
+);
 
 /** Class applied to the native file-explorer's `.workspace-leaf` to hide it.
  *  Applied in JS (not via a `[data-type]` CSS selector) because the view type
@@ -34,7 +44,7 @@ export default class PortalPlugin extends Plugin {
       (leaf: WorkspaceLeaf) => new PortalView(leaf, this),
     );
 
-    this.addRibbonIcon('panel-left', 'Open Portal', () => {
+    this.addRibbonIcon('hi-panel-left', 'Open Portal', () => {
       void this.activateView();
     });
     this.addCommand({
