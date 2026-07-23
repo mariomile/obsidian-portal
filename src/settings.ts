@@ -51,6 +51,10 @@ export interface PortalSettings {
   desktopNoteTransition: boolean;
   /** Persistent top-to-bottom section order, including hidden sections. */
   sectionOrder: PortalSectionKey[];
+  /** Folder paths (exact, vault-relative) never rendered in the Folders tree —
+   *  for vault-internal asset directories (e.g. a custom Iconize icon pack)
+   *  that must live in synced vault content but aren't knowledge to browse. */
+  hiddenFolders: string[];
 }
 
 export const DEFAULT_SETTINGS: PortalSettings = {
@@ -66,6 +70,7 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   enabledSections: [...PORTAL_SECTION_KEYS],
   sectionOrder: [...PORTAL_SECTION_KEYS],
   desktopNoteTransition: false,
+  hiddenFolders: [],
 };
 
 const asStringArray = (value: unknown, fallback: string[]): string[] =>
@@ -106,6 +111,7 @@ export function parseSettings(raw: unknown): PortalSettings {
     collapsedSections: asStringArray(data.collapsedSections, DEFAULT_SETTINGS.collapsedSections),
     enabledSections: parseEnabledSections(data.enabledSections),
     sectionOrder: parseSectionOrder(data.sectionOrder),
+    hiddenFolders: asStringArray(data.hiddenFolders, DEFAULT_SETTINGS.hiddenFolders),
   };
 }
 

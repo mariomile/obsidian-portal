@@ -284,8 +284,10 @@ export class FoldersSection {
       depth === 0
         ? this.sortRootChildren(folder)
         : [...folder.children].sort((a, b) => this.compareChildren(a, b));
+    const hidden = this.ctx.settings.hiddenFolders;
     for (const child of sorted) {
       if (child instanceof TFolder) {
+        if (hidden.includes(child.path)) continue;
         if (!filter || filter.show.has(child.path)) {
           this.renderFolder(child, parentEl, depth, filter);
         }
