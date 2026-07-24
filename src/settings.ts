@@ -55,6 +55,11 @@ export interface PortalSettings {
    *  for vault-internal asset directories (e.g. a custom Iconize icon pack)
    *  that must live in synced vault content but aren't knowledge to browse. */
   hiddenFolders: string[];
+  /** Override Obsidian's core Lucide icons (menus, ribbon, mobile navbar,
+   *  settings) with Huge Icons glyphs so the whole app speaks one iconographic
+   *  language. Default ON. There is no runtime undo for `addIcon()`, so turning
+   *  this OFF only takes effect after an app restart. */
+  hugeCoreIcons: boolean;
 }
 
 export const DEFAULT_SETTINGS: PortalSettings = {
@@ -71,6 +76,7 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   sectionOrder: [...PORTAL_SECTION_KEYS],
   desktopNoteTransition: false,
   hiddenFolders: [],
+  hugeCoreIcons: true,
 };
 
 const asStringArray = (value: unknown, fallback: string[]): string[] =>
@@ -112,6 +118,10 @@ export function parseSettings(raw: unknown): PortalSettings {
     enabledSections: parseEnabledSections(data.enabledSections),
     sectionOrder: parseSectionOrder(data.sectionOrder),
     hiddenFolders: asStringArray(data.hiddenFolders, DEFAULT_SETTINGS.hiddenFolders),
+    hugeCoreIcons:
+      typeof data.hugeCoreIcons === 'boolean'
+        ? data.hugeCoreIcons
+        : DEFAULT_SETTINGS.hugeCoreIcons,
   };
 }
 
@@ -140,6 +150,20 @@ export class PortalSettingTab extends PluginSettingTab {
             this.plugin.settings.hideNativeExplorer = value;
             await this.plugin.saveSettings();
             this.plugin.applyExplorerVisibility();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Huge core icons')
+      .setDesc(
+        'Re-skin Obsidian’s own icons (menus, ribbon, mobile navbar, settings) with Huge Icons so the whole app matches Portal. Turning this off takes effect only after an app restart — icon overrides cannot be undone at runtime.',
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.hugeCoreIcons)
+          .onChange(async (value) => {
+            this.plugin.settings.hugeCoreIcons = value;
+            await this.plugin.saveSettings();
           }),
       );
 

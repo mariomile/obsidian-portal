@@ -1,5 +1,6 @@
 import { Plugin, addIcon } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
+import { installCoreIcons } from './icons/core-icons';
 import { installNoteEnter } from './nav/note-enter';
 import { installTabDedupe } from './nav/tab-dedupe';
 import { PortalView, PORTAL_VIEW_TYPE } from './portal-view';
@@ -38,6 +39,11 @@ export default class PortalPlugin extends Plugin {
 
   async onload(): Promise<void> {
     this.settings = parseSettings(await this.loadData());
+
+    // Re-skin Obsidian's core Lucide icons with Huge Icons before any view or
+    // chrome renders. Only when the setting is on; there is no runtime undo, so
+    // disabling it takes effect on the next app restart (see setting desc).
+    if (this.settings.hugeCoreIcons) installCoreIcons();
 
     this.registerView(
       PORTAL_VIEW_TYPE,
