@@ -427,34 +427,57 @@
 /* --- mobile slice: touch targets + always-on affordances -----------------
    On phone the sidebar is a full-screen drawer; hover doesn't exist, so
    normally-hover-revealed controls (unpin ×) are shown, and every tappable
-   row/control meets the 44pt Apple HIG minimum. */
+   row/control meets the --cosmos-touch-min (44px) Apple HIG floor. */
 @media (pointer: coarse) {
   .portal-tree-row,
   .portal-nav-row,
   .portal-section-header,
   .portal-jump-hit {
-    min-height: 44px;
+    min-height: var(--cosmos-touch-min, 44px);
   }
   .portal-jump-input {
-    min-height: 40px;
+    min-height: var(--cosmos-touch-min, 44px);
   }
   .portal-tool {
-    width: 40px;
-    height: 40px;
+    width: var(--cosmos-touch-min, 44px);
+    height: var(--cosmos-touch-min, 44px);
   }
   .portal-section-action {
+    width: var(--cosmos-touch-min, 44px);
+    height: var(--cosmos-touch-min, 44px);
     opacity: 1;
     pointer-events: auto;
   }
   .portal-pin-remove {
     opacity: 1;
-    width: 28px;
+    width: var(--cosmos-touch-min, 44px);
+    min-height: var(--cosmos-touch-min, 44px);
   }
 }
 body.is-phone .portal-tree-row,
 body.is-phone .portal-nav-row,
 body.is-phone .portal-section-header {
   min-height: var(--cosmos-touch-min, 44px);
+}
+
+/* Press-scale feedback on tap (kit §3 MUST for phone tap targets). Cosmos's
+   own phone press-scale rule (cosmos-phone.css §E) only targets its own
+   selector list (.clickable-icon, .nav-file-title, .menu-item, …) — Portal's
+   custom rail classes aren't in it, so the plugin supplies the feedback
+   itself with a literal fallback (theme-independent with Cosmos absent).
+   transform-only, composited, respects prefers-reduced-motion via the
+   duration token collapsing to 0ms under that media query. */
+@media (pointer: coarse) {
+  .portal-tree-row:active,
+  .portal-nav-row:active,
+  .portal-section-header:active,
+  .portal-jump-hit:active,
+  .portal-tool:active,
+  .portal-section-action:active,
+  .portal-pin-remove:active {
+    transform: scale(var(--cosmos-press-scale, 0.98));
+    transition: transform var(--cosmos-t-fast, 140ms) var(--cosmos-native, cubic-bezier(0.32, 0.72, 0, 1));
+  }
 }
 
 /* § Note-enter — Craft-style page transition (installNoteEnter).
