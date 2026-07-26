@@ -105,3 +105,97 @@ violation, but lives in the untouchable `nav-block.ts`).
   press-scale) are verified by reading the resulting CSS values against the
   kit's phone column, per hard constraint (`EmulateMobile` never enabled —
   it kills Node-based plugins). Phone sign-off remains Mario's, on-device.
+
+---
+
+## §6 — wave 2026-07 dinamica
+
+Audit of `styles.css` (505 lines pre-fix) + `src/nav/dnd.ts`,
+`src/nav/context-menu.ts`, `src/nav/note-enter.ts` against
+`obsidian-cosmos-theme/docs/mv-kit.md` §6 "Elevation & motion depth"
+(commit `10f5ddc`, cantiere 2 — `docs/2026-07-25-dynamics-depth-design.md`).
+`src/nav/nav-block.ts` excluded per hard constraint (Mario's uncommitted
+in-flight diff); untouched, byte-identical before/after this wave. Scope:
+motion/elevation coherence only — no layout redesign, no new components, per
+brief non-goals. Portal is the first plugin through cantiere 2 (rollout order
+Sonar → **Portal** → Masonry → TabX); no prior §6 wave exists anywhere in the
+suite to defer to, so every verdict below is argued from mv-kit.md's text and
+from cross-plugin precedent that predates §6 (Masonry's `.masonry-card`
+lift-on-hover vs Sonar's `.sonar-result` colour-only row-hover, and Cosmos's
+own `cosmos-islands.css` sidebar elevation).
+
+Per-rule verdict: **pass** (already compliant, nothing to do) / **fixed**
+(this wave) / **waived** (kit rule doesn't literally apply to this surface,
+with reason) / **deferred** (real violation, lives in the untouchable
+`nav-block.ts` — none found this wave).
+
+### Elevation hierarchy
+
+| Surface | Desktop | Phone | Verdict |
+|---|---|---|---|
+| `.portal-rail` (the persistent sidebar/rail — Island tier candidate) | No Portal-owned `box-shadow` anywhere in `styles.css` | same | **pass, waived** — Cosmos's own `cosmos-islands.css` already applies `--cosmos-island-shadow` to `.mod-left-split .workspace-tab-container` (the sidedock chrome Portal's rail renders inside), gated to the flavours that use the island treatment. Portal correctly does **not** redeclare an Island shadow itself — doing so would create the exact stacked-tier violation §6's MUST NOT forbids (two shadow declarations on the same visual surface). Verified by reading `cosmos-islands.css` directly, not assumed. |
+| Context menus / modals (Pop tier candidate) | Portal owns no popover/menu chrome of its own | same | **pass, not applicable** — confirmed by reading `src/nav/context-menu.ts` in full: `showFileMenu`/`showBulkMenu` use Obsidian's native `Menu`, `MoveModal`/`BulkMoveModal` use native `FuzzySuggestModal`. Nothing plugin-authored to consume `--cosmos-pop-shadow` for; this matches wave 2's §1 verdict on the same surfaces. |
+| Stacked tiers | 0 `box-shadow` declarations in `styles.css` except `.portal-tree-row.is-kb`'s `inset 0 0 0 1px` keyboard-cursor ring | same | **pass** — an inset 1px ring is a focus indicator, not an elevation shadow (no blur/offset reading as depth); nothing to stack against. |
+
+### Hover richness
+
+| Rule | Desktop | Phone | Verdict |
+|---|---|---|---|
+| Colour **and** lift, never colour alone | All 12 `:hover` rules in `styles.css` are colour/opacity washes only (`background-color`, `color`, `opacity`) on dense list-row surfaces (`.portal-tree-row`, `.portal-jump-hit`, `.portal-section-header`, `.portal-pin-remove`, `.portal-collection-open`) — no `transform` lift on any of them | same | **pass, waived** — mv-kit's own code example under this rule shows `.row:hover` as colour-only and `.card:hover` as lift-only, as two *distinct* patterns, not one rule both must satisfy. Cross-plugin precedent confirms the row/card split is real and already lived: `obsidian-masonry`'s `.masonry-card:hover` (a grid card) gets `box-shadow` + colour; `obsidian-sonar`'s `.sonar-result:hover` (a dense list row, same shape as every Portal row) is colour-only, no lift. Portal's rows are card-shaped nowhere — adding a `translateY` lift to every tree row would read as jitter in a dense list, not the "hint" the kit describes for card surfaces. No lift-transform hover exists in Portal to check against the ≤2px cap, so that MUST is vacuously satisfied. |
+| `--mv-wash` for colour transitions, `--mv-lift` for transform transitions (not interchangeable) | **was a violation**: the single `--portal-motion` alias (`--cosmos-t-fast` + `--mv-lift`) was reused for every transition in the file, including 10 `background-color`/`color`/`opacity` wash transitions that should ease with `--mv-wash` | same fix applies (`--portal-motion` is device-agnostic) | **fixed** — added a second alias `--portal-wash-motion: var(--cosmos-t-fast, 120ms) var(--mv-wash, cubic-bezier(0.25, 1, 0.5, 1))` next to `--portal-motion` in `.portal-rail`'s local-alias block, and repointed all 10 colour/opacity `transition` declarations (`.portal-section-header`, `.portal-section-title`, `.portal-section-action`, `.portal-tree-row`, `.portal-row-icon`, `.portal-twisty`, `.portal-pin-remove`, `.portal-collection-open`, `.portal-jump-hit`) to it. `--portal-motion` itself (`--mv-lift`) is now used for exactly one thing: `.portal-section-twisty`'s `transform: rotate()` on collapse/expand — the file's only genuine physical-transform transition. Guarded by a new style-contract test. |
+| `transform` lift never exceeds 2px | n/a — no lift-transform hover exists (see row above) | same | **pass, not applicable** |
+| Hover gated to `@media (hover: hover)` on phone-reachable elements | **was a violation**: 0 of the file's 12 `:hover` rules were wrapped in `@media (hover: hover)` — Portal's rail is explicitly phone-reachable (renders as a full-screen drawer on phone, per the file's own existing `@media (pointer: coarse)` / `body.is-phone` blocks) | same rule, now fixed | **fixed** — wrapped all 12 `:hover` rules in `@media (hover: hover)`. `:focus-visible` rules were left untouched and ungated (keyboard-only, must never be hover-gated — verified by re-reading each grouped selector before editing so no `:focus-visible` selector was accidentally pulled inside a hover-only block). One second-order fix required: `.portal-collection-open`'s only reveal mechanism was `.portal-collection:hover`, and it had no existing phone-fallback (unlike `.portal-section-action`/`.portal-pin-remove`, which already had one in the `@media (pointer: coarse)` block) — gating its hover without a fallback would have made the "open base" ⇗ control permanently unreachable on touch, a real functional regression and a violation of the program's mobile-parity principle ("azioni restano sempre raggiungibili"). Added `.portal-collection-open { opacity: 1 }` to the existing phone always-visible block, mirroring the established `.portal-pin-remove` pattern exactly — same shape of fix already in the file, not a new pattern. Guarded by a new style-contract test. |
+
+### Drag polish
+
+| Surface | Desktop | Phone | Verdict |
+|---|---|---|---|
+| Drag positioning via `transform`, never `left`/`top`/`margin` | Portal uses native HTML5 drag-and-drop exclusively (`draggable="true"` + `dragstart`/`dragover`/`drop` listeners in `src/nav/dnd.ts`) — confirmed by reading the full file: no `setDragImage`, no `.is-dragging`/`.is-dropped` classes, no synthetic drag-ghost element anywhere in `src/` | same, native DnD has no phone equivalent gesture in Portal (no long-press-to-drag implemented) | **pass, not applicable** — the browser's native drag-ghost paints itself; Portal has no transform-driven dragged element for this rule to govern. The two `left`/`top` declarations that do exist in `styles.css` (`.portal-drop-before::before` / `.portal-drop-after::after`, the Finder-style insertion line) are a **static** indicator toggled on/off via class add/remove in `dnd.ts` on `dragover`/`dragleave` — not repositioned per pointer-move frame, no `transition` even declared on them. This is not the per-frame-reflow anti-pattern the rule targets (a `left`/`top`-animated *dragged* element); it's a one-shot positioned overlay, the standard CSS idiom for a static line indicator. |
+| Drop settle via `--cosmos-native` | n/a — no drop-settle animation exists (native browser drag-end has no Portal-owned settle transition) | same | **pass, not applicable** |
+
+### Panel & tab transitions
+
+| Surface | Desktop | Phone | Verdict |
+|---|---|---|---|
+| `.portal-section.is-collapsed .portal-section-body { display: none }` (section expand/collapse) | Instant `display:none` toggle, no transition | same | **pass, waived** — matches native Obsidian folder-tree collapse behaviour exactly (also an instant `display:none`, unanimated). Verified Cosmos does not animate `.nav-folder-children` collapse anywhere in the theme's source (`grep -rl "nav-folder-children" *.css` → no hits) — the theme deliberately leaves this native interaction alone. §6's panel-motion example is workspace-level structural chrome (sidebar open-close, ribbon peek); a tree-item disclosure toggle inside an already-open panel is a different, smaller-scoped interaction the kit's panel rule doesn't reach, and changing it would be new-animation scope creep beyond a coherence fix. |
+| `.portal-jump.is-open { display: block }` (search/jump box reveal) | Instant `display:none`↔`block`, no transition | same | **pass, waived** — a keyboard-hotkey-triggered search input expects instant focus/typing readiness (the same UX contract as Obsidian's native quick-switcher and Sonar's own search field); it is an additive transient overlay above the tree, not a persistent panel being opened/closed nor a tab-content swap replacing existing content, so neither of §6's two panel-transition sub-rules (`--cosmos-t-panel` for structural open/close, crossfade for tab-content-swap) literally targets it. Adding entrance motion here would be a speculative enhancement outside this wave's "fix concrete violations only" mandate. |
+| `.portal-note-enter` (file-open content transition) | `var(--cosmos-t-panel, 260ms) var(--cosmos-native, …)`, `transform: translateY(8px)→none` + `opacity`, explicit `prefers-reduced-motion` guard | same, device-agnostic selector (JS gate decides when it fires) | **pass** — already compliant, verified pre-existing (wave 2 §3); correctly uses the *panel* duration token (not the faster hover token) for what is a genuinely structural full-content transition, exactly per §6's panel-motion rule. No changes this wave. |
+
+### Not touched (explicit non-goals, confirmed out of scope)
+
+- No layout/DOM changes anywhere — every fix in this wave is a CSS-only
+  token-repoint (`--portal-motion` → `--portal-wash-motion` on 10
+  declarations) or a `@media` wrapper addition (12 `:hover` rules + 1 phone
+  always-visible fallback for `.portal-collection-open`).
+- `src/nav/nav-block.ts` — untouched, byte-identical to its pre-wave state
+  (verified via diff + checksum before and after this wave); not audited
+  against §6 per hard constraint.
+- Section-collapse and jump-box reveal animation (see Panel & tab
+  transitions above) — waived, not fixed; adding entrance motion to either
+  would be new animation scope, not a fix to an identified violation.
+- Card-style lift-on-hover for tree rows — waived; Portal's rows are list
+  rows, not cards, per the kit's own row/card example and cross-plugin
+  precedent (Masonry vs Sonar).
+
+### Verification
+
+- `pnpm typecheck` — 0 errors (before and after fixes)
+- `pnpm lint` — 0 issues (before and after fixes; 1 `prefer-const` issue was
+  caught and fixed in the new style-contract test code during this wave,
+  before the final green run)
+- `pnpm test` — 37 tests passing, 0 failing (35 pre-existing + 2 new
+  style-contract assertions added this wave: "every `:hover` selector is
+  gated behind `@media (hover: hover)`" and "colour/opacity transitions
+  never pair with the `--mv-lift` motion alias"). Both new assertions were
+  sanity-checked against a deliberately reintroduced violation (temporarily
+  reverting one fix) to confirm they actually fail before being confirmed
+  green against the real file — not just written and trusted.
+- `src/nav/nav-block.ts`: MD5 checksum and `git diff` identical before and
+  after this wave's edits.
+- Desktop/phone screenshot verification: **pending**, same constraint as
+  wave 2 — `EmulateMobile` never enabled (kills Node-based plugins); phone
+  behaviour (hover-gate correctness, the `.portal-collection-open` touch
+  fallback) verified by reading the resulting CSS against the kit's phone
+  column and against Portal's own existing `@media (pointer: coarse)` /
+  `body.is-phone` precedent in the same file. Phone sign-off remains
+  Mario's, on-device.
