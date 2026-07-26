@@ -4,9 +4,13 @@
    selection). Falls back cleanly to core variables when Cosmos is absent. */
 
 /* Local aliases so every surface shares one motion + wash vocabulary and we
-   inherit Cosmos tokens when present, sane defaults otherwise. */
+   inherit Cosmos tokens when present, sane defaults otherwise.
+   Two motion aliases (mv-kit §6): colour/opacity washes ease with --mv-wash,
+   physical transforms (the twisty's rotate) ease with --mv-lift — the two
+   easings are not interchangeable per the kit's hover-richness rule. */
 .portal-rail {
   --portal-motion: var(--cosmos-t-fast, 120ms) var(--mv-lift, cubic-bezier(0.22, 1, 0.36, 1));
+  --portal-wash-motion: var(--cosmos-t-fast, 120ms) var(--mv-wash, cubic-bezier(0.25, 1, 0.5, 1));
   --portal-wash: color-mix(in srgb, var(--text-normal) 6%, transparent);
   --portal-wash-strong: color-mix(in srgb, var(--text-normal) 9%, transparent);
   --portal-indent: 16px;
@@ -56,10 +60,12 @@
   background-color: transparent;
   cursor: var(--cursor, pointer);
   user-select: none;
-  transition: background-color var(--portal-motion), color var(--portal-motion);
+  transition: background-color var(--portal-wash-motion), color var(--portal-wash-motion);
 }
-.portal-section-header:hover {
-  background-color: var(--portal-wash);
+@media (hover: hover) {
+  .portal-section-header:hover {
+    background-color: var(--portal-wash);
+  }
 }
 .portal-section-header:focus-visible,
 .portal-section-header:has(.portal-section-action:focus-visible) {
@@ -79,8 +85,9 @@
   height: 24px;
   color: var(--text-muted);
   /* Chevron points down when expanded; rotates to point right when collapsed.
-     Rotating in CSS avoids re-issuing setIcon on every toggle. */
-  transition: transform var(--portal-motion), color var(--portal-motion);
+     Rotating in CSS avoids re-issuing setIcon on every toggle. Rotate keeps
+     the --mv-lift (physical) easing; the colour wash uses --mv-wash. */
+  transition: transform var(--portal-motion), color var(--portal-wash-motion);
 }
 .portal-section-twisty svg {
   width: 14px;
@@ -89,8 +96,10 @@
 .portal-section.is-collapsed .portal-section-twisty {
   transform: rotate(-90deg);
 }
-.portal-section-header:hover .portal-section-twisty {
-  color: var(--text-muted);
+@media (hover: hover) {
+  .portal-section-header:hover .portal-section-twisty {
+    color: var(--text-muted);
+  }
 }
 
 .portal-section-title {
@@ -99,10 +108,12 @@
   font-size: var(--font-ui-medium, 0.9375rem);
   font-weight: var(--font-semibold, 600);
   color: var(--text-normal);
-  transition: color var(--portal-motion);
+  transition: color var(--portal-wash-motion);
 }
-.portal-section-header:hover .portal-section-title {
-  color: var(--text-normal);
+@media (hover: hover) {
+  .portal-section-header:hover .portal-section-title {
+    color: var(--text-normal);
+  }
 }
 
 .portal-section-actions {
@@ -118,13 +129,18 @@
   color: var(--text-muted);
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--portal-motion), color var(--portal-motion), background-color var(--portal-motion);
+  transition: opacity var(--portal-wash-motion), color var(--portal-wash-motion), background-color var(--portal-wash-motion);
 }
-.portal-section-header:hover .portal-section-action,
 .portal-section-header:focus-visible .portal-section-action,
 .portal-section-header:has(.portal-section-action:focus-visible) .portal-section-action {
   opacity: 1;
   pointer-events: auto;
+}
+@media (hover: hover) {
+  .portal-section-header:hover .portal-section-action {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 /* Collapsed → body is hidden but stays mounted (renderers keep running). */
@@ -153,15 +169,17 @@
      shrinking type — text and icons stay at their standard readable size. */
   font-size: var(--font-ui-small, 0.85rem);
   line-height: 1.3;
-  transition: background-color var(--portal-motion), color var(--portal-motion);
+  transition: background-color var(--portal-wash-motion), color var(--portal-wash-motion);
   /* Off-screen rows skip layout + paint, so the sidebar's width animation
      (and any resize) stays smooth even with a large expanded tree — a CSS
      stand-in for the virtualization Obsidian's native explorer uses. */
   content-visibility: auto;
   contain-intrinsic-size: auto 28px;
 }
-.portal-tree-row:hover {
-  background-color: var(--portal-wash);
+@media (hover: hover) {
+  .portal-tree-row:hover {
+    background-color: var(--portal-wash);
+  }
 }
 /* Selection = a filled rounded pill with weight (Craft convention), NOT accent
    text — the fill carries the state so the rail stays calm. */
@@ -194,14 +212,16 @@
   width: var(--icon-size, 16px);
   height: var(--icon-size, 16px);
   color: var(--text-muted);
-  transition: color var(--portal-motion);
+  transition: color var(--portal-wash-motion);
 }
 .portal-row-icon svg {
   width: var(--icon-size, 16px);
   height: var(--icon-size, 16px);
 }
-.portal-tree-row:hover .portal-row-icon {
-  color: var(--text-normal);
+@media (hover: hover) {
+  .portal-tree-row:hover .portal-row-icon {
+    color: var(--text-normal);
+  }
 }
 .portal-folder > .portal-row-icon {
   color: var(--text-muted);
@@ -216,14 +236,16 @@
   width: 16px;
   height: 16px;
   color: var(--text-faint);
-  transition: color var(--portal-motion);
+  transition: color var(--portal-wash-motion);
 }
 .portal-twisty svg {
   width: 13px;
   height: 13px;
 }
-.portal-tree-row:hover .portal-twisty {
-  color: var(--text-muted);
+@media (hover: hover) {
+  .portal-tree-row:hover .portal-twisty {
+    color: var(--text-muted);
+  }
 }
 /* File rows have no twisty — the empty spacer keeps labels aligned. */
 .portal-twisty-empty {
@@ -260,13 +282,15 @@
   color: var(--text-faint);
   opacity: 0;
   cursor: var(--cursor, pointer);
-  transition: opacity var(--portal-motion), color var(--portal-motion);
+  transition: opacity var(--portal-wash-motion), color var(--portal-wash-motion);
 }
-.portal-pin:hover .portal-pin-remove {
-  opacity: 1;
-}
-.portal-pin-remove:hover {
-  color: var(--text-normal);
+@media (hover: hover) {
+  .portal-pin:hover .portal-pin-remove {
+    opacity: 1;
+  }
+  .portal-pin-remove:hover {
+    color: var(--text-normal);
+  }
 }
 .portal-pin.is-stale .portal-label {
   color: var(--text-faint);
@@ -293,17 +317,19 @@
   height: 18px;
   color: var(--text-faint);
   opacity: 0;
-  transition: opacity var(--portal-motion), color var(--portal-motion);
+  transition: opacity var(--portal-wash-motion), color var(--portal-wash-motion);
 }
 .portal-collection-open svg {
   width: 13px;
   height: 13px;
 }
-.portal-collection:hover .portal-collection-open {
-  opacity: 1;
-}
-.portal-collection-open:hover {
-  color: var(--text-normal);
+@media (hover: hover) {
+  .portal-collection:hover .portal-collection-open {
+    opacity: 1;
+  }
+  .portal-collection-open:hover {
+    color: var(--text-normal);
+  }
 }
 
 /* --- inline rename input --------------------------------------------------- */
@@ -339,10 +365,12 @@
   padding: 4px 8px;
   border-radius: 6px;
   cursor: var(--cursor, pointer);
-  transition: background-color var(--portal-motion);
+  transition: background-color var(--portal-wash-motion);
 }
-.portal-jump-hit:hover {
-  background-color: var(--portal-wash);
+@media (hover: hover) {
+  .portal-jump-hit:hover {
+    background-color: var(--portal-wash);
+  }
 }
 .portal-jump-icon {
   display: flex;
@@ -452,6 +480,13 @@
     opacity: 1;
     width: var(--cosmos-touch-min, 44px);
     min-height: var(--cosmos-touch-min, 44px);
+  }
+  /* mv-kit §6: hover reveal is gated to @media (hover: hover) above, so the
+     ⇗ "open base" control needs its own always-visible fallback here — same
+     pattern as .portal-section-action/.portal-pin-remove — or it would be
+     unreachable on touch (never behind a state the finger can't produce). */
+  .portal-collection-open {
+    opacity: 1;
   }
 }
 body.is-phone .portal-tree-row,
