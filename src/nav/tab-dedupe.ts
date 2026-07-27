@@ -15,6 +15,7 @@
 import { WorkspaceLeaf } from 'obsidian';
 import type { App, OpenViewState, TFile } from 'obsidian';
 import type PortalPlugin from '../main';
+import { collectWorkspaceLeaves } from './tab-dedupe-core';
 
 type OpenFile = (this: WorkspaceLeaf, file: TFile, openState?: OpenViewState) => Promise<void>;
 
@@ -24,15 +25,18 @@ type OpenFile = (this: WorkspaceLeaf, file: TFile, openState?: OpenViewState) =>
  *  pdf, images), not just markdown. */
 function findOpenLeaf(app: App, path: string, self: WorkspaceLeaf): WorkspaceLeaf | null {
   const { workspace } = app;
-  let found: WorkspaceLeaf | null = null;
-  workspace.iterateAllLeaves((leaf) => {
-    if (found || leaf === self) return;
+  const registry = (app as App & {
+    viewRegistry?: { viewByType?: Record<string, unknown> };
+  }).viewRegistry;
+  const viewTypes = Object.keys(registry?.viewByType ?? {});
+  for (const leaf of collectWorkspaceLeaves(workspace, viewTypes)) {
+    if (leaf === self) continue;
     const root = leaf.getRoot();
-    if (root === workspace.leftSplit || root === workspace.rightSplit) return;
+    if (root === workspace.leftSplit || root === workspace.rightSplit) continue;
     const state = leaf.getViewState().state as { file?: unknown } | undefined;
-    if (state?.file === path) found = leaf;
-  });
-  return found;
+    if (state?.file === path) return leaf;
+  }
+  return null;
 }
 
 export function installTabDedupe(plugin: PortalPlugin): void {
