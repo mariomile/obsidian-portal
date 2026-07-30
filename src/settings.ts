@@ -60,6 +60,10 @@ export interface PortalSettings {
    *  language. Default ON. There is no runtime undo for `addIcon()`, so turning
    *  this OFF only takes effect after an app restart. */
   hugeCoreIcons: boolean;
+  /** Phone-only: the header's top-left drawer toggle goes Back when there is
+   *  navigation history, and only opens the menu (its native behaviour) when
+   *  there is nothing to go back to. Default ON. Applies live. */
+  mobileHeaderBack: boolean;
 }
 
 export const DEFAULT_SETTINGS: PortalSettings = {
@@ -77,6 +81,7 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   desktopNoteTransition: false,
   hiddenFolders: [],
   hugeCoreIcons: true,
+  mobileHeaderBack: true,
 };
 
 const asStringArray = (value: unknown, fallback: string[]): string[] =>
@@ -122,6 +127,10 @@ export function parseSettings(raw: unknown): PortalSettings {
       typeof data.hugeCoreIcons === 'boolean'
         ? data.hugeCoreIcons
         : DEFAULT_SETTINGS.hugeCoreIcons,
+    mobileHeaderBack:
+      typeof data.mobileHeaderBack === 'boolean'
+        ? data.mobileHeaderBack
+        : DEFAULT_SETTINGS.mobileHeaderBack,
   };
 }
 
@@ -163,6 +172,20 @@ export class PortalSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.hugeCoreIcons)
           .onChange(async (value) => {
             this.plugin.settings.hugeCoreIcons = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName('Back button in header (phone)')
+      .setDesc(
+        'On phone, the top-left header button goes back when there’s navigation history, and only opens the menu when there’s nothing to go back to. Off restores the plain drawer toggle.',
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.mobileHeaderBack)
+          .onChange(async (value) => {
+            this.plugin.settings.mobileHeaderBack = value;
             await this.plugin.saveSettings();
           }),
       );

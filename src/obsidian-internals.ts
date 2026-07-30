@@ -68,6 +68,28 @@ export function executeCommand(app: App, id: string): boolean {
     : false;
 }
 
+interface LeafHistory {
+  backHistory?: unknown[];
+}
+interface LeafWithHistory {
+  history?: LeafHistory;
+}
+interface WorkspaceWithRecentLeaf {
+  getMostRecentLeaf?: () => unknown;
+  activeLeaf?: unknown;
+}
+
+/** True when the most-recent leaf has somewhere to navigate back to. Reads the
+ *  leaf's `history.backHistory` stack (real and long-stable, absent from the
+ *  public API). Any structural miss falls back to `false` so callers never
+ *  hijack a button that would otherwise do something useful. */
+export function canGoBack(app: App): boolean {
+  const ws = app.workspace as unknown as WorkspaceWithRecentLeaf;
+  const leaf = (ws.getMostRecentLeaf?.() ?? ws.activeLeaf) as LeafWithHistory | null;
+  const stack = leaf?.history?.backHistory;
+  return Array.isArray(stack) && stack.length > 0;
+}
+
 interface IconizeApi {
   setIconForNode(iconName: string, node: HTMLElement): unknown;
 }

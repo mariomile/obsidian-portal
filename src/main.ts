@@ -1,6 +1,7 @@
 import { Plugin, addIcon } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import { installCoreIcons } from './icons/core-icons';
+import { installMobileHeaderBack } from './nav/mobile-header-back';
 import { installNoteEnter } from './nav/note-enter';
 import { installTabDedupe } from './nav/tab-dedupe';
 import { PortalView, PORTAL_VIEW_TYPE } from './portal-view';
@@ -68,6 +69,9 @@ export default class PortalPlugin extends Plugin {
 
     // Phone-only Craft-style page transition on file-open (no-op on desktop).
     installNoteEnter(this);
+
+    // Phone-only: header top-left goes Back (falls back to opening the menu).
+    installMobileHeaderBack(this);
 
     // Re-apply the hide whenever the layout changes, so a file-explorer leaf
     // the user re-adds (e.g. via the "Files" ribbon) gets hidden again.
