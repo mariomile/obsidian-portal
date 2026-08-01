@@ -73,6 +73,21 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
    *  listener) without running its completion logic — used only by
    *  `unmount()`, which cleans up the DOM itself via `clearTransforms()`. */
   let cancelPendingEpilogue: (() => void) | null = null;
+  /** Identifies which settle epilogue currently owns `cancelPendingEpilogue`
+   *  and `gestureInFlight`. Two epilogues can be alive at once — a second
+   *  swipe (or the pager's own re-entrant-touchstart `onSettle('back')`)
+   *  can claim and settle while an earlier one is still gliding — and both
+   *  epilogues close over the SAME two outer variables. Without an
+   *  ownership check, the earlier one finishing later would null out the
+   *  later one's still-pending canceller (orphaning it — `unmount()` could
+   *  no longer cancel it) and clear `gestureInFlight` while the later one
+   *  is still animating. Only the epilogue that still matches this token
+   *  when it finishes is allowed to touch the two shared slots (or run
+   *  `clearTransforms()` / commit `activeIndex` / re-render); an epilogue
+   *  that has been superseded does only its own local listener/timer
+   *  cleanup and leaves the shared teardown to whichever epilogue is
+   *  current when it finishes. */
+  let epilogueOwner: symbol | null = null;
   /** The slot configuration the currently-mounted bar was built from
    *  (JSON of `settings.phoneChromeSlots`). `PhoneChromeNavbar` takes its
    *  resolved slots at construction and has no update method, so the only
@@ -121,11 +136,16 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
     // Cancel (not run) any settle epilogue in flight from a completed drag —
     // its timeout and transitionend listener would otherwise fire after
     // `container` is null and skip `clearTransforms()` entirely, leaving an
-    // inline `translateX` stuck on an Obsidian leaf.
-    cancelPendingEpilogue?.();
-    pager?.destroy();
-    pager = null;
-    unmounted = false;
+    // inline `translateX` stuck on an Obsidian leaf. try/finally: neither
+    // call throws today, but a throw here must not leave `unmounted` stuck
+    // `true` forever — that would silently no-op every future `onSettle`.
+    try {
+      cancelPendingEpilogue?.();
+      pager?.destroy();
+    } finally {
+      pager = null;
+      unmounted = false;
+    }
     clearTransforms();
     navbar?.destroy();
     navbar = null;
@@ -268,6 +288,12 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
         let done = false;
         let epilogueTimer = 0;
         let transitionListener: ((evt: Event) => void) | null = null;
+        // This epilogue's identity. Claiming ownership below (before the
+        // listener/timer are even wired up) means a slower-to-settle
+        // earlier epilogue that finishes after this one has already taken
+        // over will see itself superseded and back off.
+        const owner = Symbol('phone-chrome-settle-epilogue');
+        epilogueOwner = owner;
 
         const finish = (): void => {
           if (done) return;
@@ -275,8 +301,23 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
           window.clearTimeout(epilogueTimer);
           if (transitionListener) currentEl.removeEventListener('transitionend', transitionListener);
           transitionListener = null;
+          if (epilogueOwner !== owner) {
+            // Superseded by a later swipe (or the pager's re-entrant-
+            // touchstart onSettle('back')) that claimed and is now the
+            // current owner of `cancelPendingEpilogue` / `gestureInFlight`.
+            // Touching either here would orphan that newer epilogue's
+            // canceller, and `clearTransforms()` below would strip its
+            // still-live `portal-phone-settling` classes and inline
+            // transforms mid-flight. Leave all of that — including the
+            // activeIndex commit and navbar re-render — to whichever
+            // epilogue is current when IT finishes; `clearTransforms()`
+            // sweeps every leaf in the container, not just this one's, so
+            // nothing here is left permanently dirty.
+            return;
+          }
           cancelPendingEpilogue = null;
           gestureInFlight = false;
+          epilogueOwner = null;
           clearTransforms();
           // Commit the new active index and hand the leaf over ONLY if it
           // still resolves — an unresolved leaf must leave both the bar and
@@ -305,7 +346,10 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
           window.clearTimeout(epilogueTimer);
           if (transitionListener) currentEl.removeEventListener('transitionend', transitionListener);
           transitionListener = null;
-          gestureInFlight = false;
+          if (epilogueOwner === owner) {
+            gestureInFlight = false;
+            epilogueOwner = null;
+          }
           cancelPendingEpilogue = null;
         };
       },
@@ -393,6 +437,9 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
   // leans on window resize plus an explicit timeout rather than an observer.
   plugin.registerDomEvent(window, 'resize', () => {
     if (!plugin.settings.phoneChrome) return;
+    // Same gate as sync(): a rotation mid-drag must not snap the bar to
+    // progress 0 while the finger is down or the settle glide is playing.
+    if (gestureInFlight) return;
     navbar?.render(activeIndex);
   });
 
