@@ -19,6 +19,10 @@ const TAB_CONTAINER =
 const PEEK_CLASS = 'portal-phone-peek';
 /** Marks the container while the chrome owns it (styling + gesture scope). */
 const HUB_CLASS = 'portal-phone-hub';
+/** How long the post-release glide (`.portal-phone-settling`, styles.css) is
+ *  allowed to run before the epilogue's timeout backstop fires regardless of
+ *  `transitionend`. Must stay >= the CSS transition duration. */
+const SETTLE_EPILOGUE_MS = 350;
 
 /**
  * Phone-only hub chrome: a segmented navbar plus a swipe pager across the
@@ -51,6 +55,32 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
     neighbourEl: HTMLElement;
     width: number;
   } | null = null;
+  /** True from the moment a drag is claimed until the settle epilogue (or
+   *  its cancellation) finishes — covers both the live drag and the
+   *  post-release glide. `sync()` must not touch the navbar/container while
+   *  this is true: a `layout-change` fired by `loadIfDeferred()` mid-drag
+   *  would otherwise re-render the bar to progress 0 under the finger. */
+  let gestureInFlight = false;
+  /** Set for the duration of `unmount()` so a synchronous `onSettle('back')`
+   *  triggered by `pager.destroy()` bails immediately instead of re-dirtying
+   *  the DOM we are in the middle of releasing. */
+  let unmounted = false;
+  /** Handle for the mount-time `setTimeout(0)` render backstop, so unload
+   *  mid-flight can cancel it instead of letting it fire against a torn-down
+   *  navbar. */
+  let mountRenderTimer: number | null = null;
+  /** Cancels a pending settle epilogue (its timeout + transitionend
+   *  listener) without running its completion logic — used only by
+   *  `unmount()`, which cleans up the DOM itself via `clearTransforms()`. */
+  let cancelPendingEpilogue: (() => void) | null = null;
+  /** The slot configuration the currently-mounted bar was built from
+   *  (JSON of `settings.phoneChromeSlots`). `PhoneChromeNavbar` takes its
+   *  resolved slots at construction and has no update method, so the only
+   *  way a settings change reaches an already-mounted bar is a fresh mount;
+   *  this is what `sync()` diffs against to detect that. */
+  let mountedSlotsSignature = '';
+
+  const slotsSignature = (): string => JSON.stringify(plugin.settings.phoneChromeSlots);
 
   const slotLeaves = (): (WorkspaceLeaf | null)[] =>
     resolved.map(({ slot, enabled }) => {
@@ -77,10 +107,27 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
   };
 
   const unmount = (): void => {
-    clearTransforms();
+    // Set before touching the pager: `destroy()` honours its one-onSettle-
+    // per-onClaim guarantee by calling `onSettle('back')` synchronously when
+    // torn down mid-drag, and that handler must bail instead of re-adding
+    // classes/transforms to a container we are about to release.
+    unmounted = true;
+    gestureInFlight = false;
+    gesture = null;
+    if (mountRenderTimer !== null) {
+      window.clearTimeout(mountRenderTimer);
+      mountRenderTimer = null;
+    }
+    // Cancel (not run) any settle epilogue in flight from a completed drag —
+    // its timeout and transitionend listener would otherwise fire after
+    // `container` is null and skip `clearTransforms()` entirely, leaving an
+    // inline `translateX` stuck on an Obsidian leaf.
+    cancelPendingEpilogue?.();
     pager?.destroy();
-    navbar?.destroy();
     pager = null;
+    unmounted = false;
+    clearTransforms();
+    navbar?.destroy();
     navbar = null;
     container?.removeClass(HUB_CLASS);
     container = null;
@@ -100,6 +147,7 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
       (type) => isViewTypeRegistered(plugin.app, type),
       (id) => isCommandRegistered(plugin.app, id),
     );
+    mountedSlotsSignature = slotsSignature();
     if (firstEnabledIndex(resolved) === -1) {
       unmount();
       return;
@@ -110,8 +158,12 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
     navbar = new PhoneChromeNavbar(host, resolved);
     // Backstop 2: the container may gain its width a frame after we attach.
     // render() is idempotent and no-ops at zero width, so an extra call is
-    // free; without it a mount into an unlaid-out host is permanent.
-    window.setTimeout(() => navbar?.render(activeIndex), 0);
+    // free; without it a mount into an unlaid-out host is permanent. Tracked
+    // so unmount() can cancel it if teardown happens inside this window.
+    mountRenderTimer = window.setTimeout(() => {
+      mountRenderTimer = null;
+      navbar?.render(activeIndex);
+    }, 0);
     navbar.onSelect = (index) => {
       const entry = resolved[index];
       if (!entry?.enabled) return;
@@ -165,6 +217,11 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
           // The claim's one layout read; every frame below reuses it.
           width: container.clientWidth || 1,
         };
+        // Marks the gesture as in flight for `sync()` — see its declaration
+        // above. Set last, after every DOM mutation above it, so the two
+        // null-return paths at the top of this callback stay exactly what
+        // they were: bail before touching anything, including this flag.
+        gestureInFlight = true;
         return neighbourEl;
       },
       onProgress: (progress) => {
@@ -179,6 +236,11 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
       onSettle: (decision) => {
         const settled = gesture;
         gesture = null;
+        // Torn down mid-drag (plugin unload, container rebuilt, etc.) — the
+        // caller is about to `clearTransforms()` and release `container`
+        // itself; touching classes/transforms here would just be re-dirtying
+        // DOM we no longer own.
+        if (unmounted) return;
         if (!settled) {
           // Rubber-band release with no neighbour: nothing moved but the bar.
           navbar?.render(activeIndex);
@@ -204,26 +266,86 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
           : `translateX(${dir * width}px)`;
 
         let done = false;
-        const epilogue = (): void => {
+        let epilogueTimer = 0;
+        let transitionListener: ((evt: Event) => void) | null = null;
+
+        const finish = (): void => {
           if (done) return;
           done = true;
+          window.clearTimeout(epilogueTimer);
+          if (transitionListener) currentEl.removeEventListener('transitionend', transitionListener);
+          transitionListener = null;
+          cancelPendingEpilogue = null;
+          gestureInFlight = false;
           clearTransforms();
-          activeIndex = landing;
+          // Commit the new active index and hand the leaf over ONLY if it
+          // still resolves — an unresolved leaf must leave both the bar and
+          // the workspace's real active leaf exactly where they were, never
+          // advertise a slot that is not what is actually on screen.
           const leaf = slotLeaves()[landing];
-          if (leaf) plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
+          if (leaf) {
+            activeIndex = landing;
+            plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
+          }
           navbar?.render(activeIndex);
         };
-        currentEl.addEventListener('transitionend', epilogue, { once: true });
-        window.setTimeout(epilogue, 350);
+
+        transitionListener = (evt: Event): void => {
+          // The listener sits on `currentEl`, a whole `.workspace-leaf`
+          // subtree — any descendant's opacity/transform transition ending
+          // bubbles up. Only the leaf's OWN transform transition ending
+          // means the slide actually finished.
+          const te = evt as TransitionEvent;
+          if (te.target !== currentEl || te.propertyName !== 'transform') return;
+          finish();
+        };
+        currentEl.addEventListener('transitionend', transitionListener);
+        epilogueTimer = window.setTimeout(finish, SETTLE_EPILOGUE_MS);
+        cancelPendingEpilogue = (): void => {
+          window.clearTimeout(epilogueTimer);
+          if (transitionListener) currentEl.removeEventListener('transitionend', transitionListener);
+          transitionListener = null;
+          gestureInFlight = false;
+          cancelPendingEpilogue = null;
+        };
       },
     });
   };
 
   const sync = (): void => {
+    // Never touch the navbar/container mid-gesture — a `layout-change` from
+    // `loadIfDeferred()` (or any other event) firing while the finger is
+    // down, or during the post-release settle glide, must not re-render the
+    // bar out from under either.
+    if (gestureInFlight) return;
+
     if (!plugin.settings.phoneChrome) {
       if (navbar) unmount();
       return;
     }
+
+    // Keep `resolved` current even before deciding whether to (re)mount —
+    // `indexOfActiveLeaf()` below reads it.
+    resolved = resolveSlots(
+      plugin.settings.phoneChromeSlots,
+      (type) => isViewTypeRegistered(plugin.app, type),
+      (id) => isCommandRegistered(plugin.app, id),
+    );
+
+    if (navbar) {
+      const liveContainer = document.querySelector<HTMLElement>(TAB_CONTAINER);
+      const slotsChanged = slotsSignature() !== mountedSlotsSignature;
+      if (liveContainer !== container || slotsChanged) {
+        // Either Obsidian rebuilt the tab container (our reference is now
+        // detached — touches on it are dead, and the chrome would otherwise
+        // die silently) or the slot configuration changed underneath an
+        // already-mounted bar. `PhoneChromeNavbar` fixes its resolved slots
+        // at construction with no update method, so a fresh mount is the
+        // only way either change actually reaches the chrome.
+        unmount();
+      }
+    }
+
     const atHub = indexOfActiveLeaf() !== -1;
     if (atHub && !navbar) mount();
     else if (!atHub && navbar) unmount();
@@ -273,4 +395,11 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
     if (!plugin.settings.phoneChrome) return;
     navbar?.render(activeIndex);
   });
+
+  // Plugin lifecycle teardown: without this, disabling/updating Portal while
+  // mounted at hub level leaves the navbar DOM injected into Obsidian's
+  // `.workspace-tabs` and the pager's four document-capture touch listeners
+  // alive for the rest of the session — a dead plugin still translating
+  // leaves and swallowing touches.
+  plugin.register(() => unmount());
 }
