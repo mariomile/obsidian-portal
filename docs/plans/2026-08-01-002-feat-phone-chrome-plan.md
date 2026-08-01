@@ -434,7 +434,7 @@ git commit -m "feat(phone-chrome): slot model and settings"
 
 **Interfaces:**
 - Consumes: nothing (deliberately does not import `slots.ts` — it takes a count, not a slot list, so it stays trivially testable).
-- Produces: `SlotGeometry`, `PillLayoutInput`, `layoutPills(input: PillLayoutInput): SlotGeometry[]`.
+- Produces: `SlotGeometry`, `PillLayoutInput` (including the optional `targetIndex` the pager passes when it skips a non-pageable slot), `layoutPills(input: PillLayoutInput): SlotGeometry[]`.
 
 This is the heart of the feature: the interpolated pill that makes the gesture read as premium. It is a pure function over numbers.
 
@@ -501,6 +501,13 @@ test('negative progress expands the previous slot', () => {
   assert.equal(pills[1]?.width, 40);
 });
 
+test('an explicit targetIndex lets the pill skip a non-pageable slot', () => {
+  const pills = layoutPills({ ...base, progress: 0.5, targetIndex: 3 });
+  assert.equal(pills[1]?.width, 40 + 108);
+  assert.equal(pills[3]?.width, 40 + 108);
+  assert.equal(pills[2]?.width, 40, 'the skipped slot stays collapsed');
+});
+
 test('rubber-band at the ends leaves the pill exactly at rest', () => {
   const atStart = layoutPills({ ...base, activeIndex: 0, progress: -0.7 });
   assert.deepEqual(atStart, layoutPills({ ...base, activeIndex: 0, progress: 0 }));
@@ -542,9 +549,10 @@ Create `src/phone-chrome/pill-geometry.ts`:
  * proportion to gesture progress, which is what produces the interpolated
  * pill (outgoing still wide, incoming already half-open) instead of a snap.
  *
- * Consumers must apply `width` as a `transform: scaleX()` against a fixed
- * base box, never as a real `width` — animating width is layout thrash on
- * iOS WebKit.
+ * Consumers must realise `width` through transforms — the navbar renders the
+ * capsule as a 3-slice whose caps translate and whose flat middle scales —
+ * never by animating the real `width` property (layout thrash on iOS WebKit)
+ * and never by `scaleX` on a rounded box (squashed corners, stretched icons).
  */
 
 export interface SlotGeometry {
@@ -561,6 +569,12 @@ export interface PillLayoutInput {
   activeIndex: number;
   /** -1..1. Positive drags toward the next slot, negative toward the previous. */
   progress: number;
+  /**
+   * Index the gesture is heading toward. Defaults to the adjacent slot in the
+   * progress direction; the pager passes it explicitly when it skips a
+   * disabled or tap-only slot.
+   */
+  targetIndex?: number;
   /** px available inside the bar's content box. */
   barWidth: number;
   /** px width of a collapsed, icon-only slot. */
@@ -577,9 +591,11 @@ export function layoutPills(input: PillLayoutInput): SlotGeometry[] {
   if (slotCount <= 0) return [];
 
   const progress = clamp(input.progress, -1, 1);
-  const targetIndex = progress > 0 ? activeIndex + 1 : activeIndex - 1;
+  const impliedTarget = progress > 0 ? activeIndex + 1 : activeIndex - 1;
+  const targetIndex = input.targetIndex ?? impliedTarget;
   // No destination → the pill stays at rest while the content rubber-bands.
-  const hasTarget = targetIndex >= 0 && targetIndex < slotCount;
+  const hasTarget =
+    targetIndex >= 0 && targetIndex < slotCount && targetIndex !== activeIndex;
   const share = hasTarget ? Math.abs(progress) : 0;
 
   const collapsedTotal = slotCount * iconWidth + (slotCount - 1) * gap;
@@ -603,7 +619,7 @@ export function layoutPills(input: PillLayoutInput): SlotGeometry[] {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test`
-Expected: PASS, all eight `pill-geometry.test.ts` tests green.
+Expected: PASS, all nine `pill-geometry.test.ts` tests green.
 
 - [ ] **Step 5: Commit**
 
@@ -705,8 +721,10 @@ Create `src/phone-chrome/gesture-decide.ts`:
  *   the finger has not travelled far enough to tell yet.
  * - `decideSnap` runs on `touchend` and says where the pager lands.
  *
- * At hub level the pager claims every horizontal drag — Obsidian's edge-drag
- * drawers are suppressed there, so there are no edge zones to carve out.
+ * At hub level the pager claims every horizontal drag it receives. The only
+ * touches it never sees are the ones born in the outer 24px, which the
+ * drawer-suppression listener in hub-level.ts swallows before they propagate
+ * — so no edge logic belongs here.
  */
 
 export type ClaimDecision = 'pending' | 'claim' | 'ignore';
@@ -783,7 +801,7 @@ git commit -m "feat(phone-chrome): pure gesture claim and snap decisions"
 
 **Interfaces:**
 - Consumes: `PhoneChromeSlot` from Task 2.
-- Produces: `ResolvedSlot`, `resolveSlots(slots, hasViewType, hasCommand): ResolvedSlot[]`, `firstEnabledIndex(resolved): number`, and the internals helpers `isViewTypeRegistered(app, type): boolean` / `isCommandRegistered(app, id): boolean`.
+- Produces: `ResolvedSlot`, `resolveSlots(slots, hasViewType, hasCommand): ResolvedSlot[]`, `firstEnabledIndex(resolved): number`, `nextPageableIndex(resolved, from, direction): number`, and the internals helpers `isViewTypeRegistered(app, type): boolean` / `isCommandRegistered(app, id): boolean`.
 
 The resolution rule is pure and takes predicates, so it is tested with fakes and never needs an `App`.
 
@@ -796,7 +814,7 @@ Create `src/phone-chrome/hub-registry.test.ts`:
 ```ts
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { firstEnabledIndex, resolveSlots } from './hub-registry.ts';
+import { firstEnabledIndex, nextPageableIndex, resolveSlots } from './hub-registry.ts';
 import type { PhoneChromeSlot } from './slots.ts';
 
 const slots: PhoneChromeSlot[] = [
@@ -859,6 +877,17 @@ test('firstEnabledIndex finds the first usable slot', () => {
 test('firstEnabledIndex returns -1 when nothing resolves', () => {
   assert.equal(firstEnabledIndex(resolveSlots(slots, none, none)), -1);
 });
+
+test('nextPageableIndex skips disabled and tap-only slots', () => {
+  const all = resolveSlots(slots, has('portal', 'masonry'), has('daily-notes'));
+  assert.equal(nextPageableIndex(all, 0, 1), 1);
+  // Forward from masonry: daily is tap-only → no pageable destination.
+  assert.equal(nextPageableIndex(all, 1, 1), -1);
+  assert.equal(nextPageableIndex(all, 1, -1), 0);
+  // With masonry missing, forward from portal skips it and finds nothing.
+  const sparse = resolveSlots(slots, has('portal'), has('daily-notes'));
+  assert.equal(nextPageableIndex(sparse, 0, 1), -1);
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -916,12 +945,26 @@ export function resolveSlots(
 export function firstEnabledIndex(resolved: readonly ResolvedSlot[]): number {
   return resolved.findIndex((r) => r.enabled);
 }
+
+/** Index of the nearest pageable slot from `from` in `direction`, skipping
+ *  disabled and tap-only slots on the way (the spec's "skipped by the
+ *  pager"), or -1 when nothing pageable exists that way. */
+export function nextPageableIndex(
+  resolved: readonly ResolvedSlot[],
+  from: number,
+  direction: 1 | -1,
+): number {
+  for (let i = from + direction; i >= 0 && i < resolved.length; i += direction) {
+    if (resolved[i]?.pageable) return i;
+  }
+  return -1;
+}
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test`
-Expected: PASS, all seven `hub-registry.test.ts` tests green.
+Expected: PASS, all eight `hub-registry.test.ts` tests green.
 
 - [ ] **Step 5: Add the internals predicates**
 
@@ -982,7 +1025,7 @@ Tell Mario that command-backed slots resolved as tap-only actions rather than pa
 
 **Interfaces:**
 - Consumes: `ResolvedSlot` (Task 5), `layoutPills` / `SlotGeometry` (Task 3).
-- Produces: `class PhoneChromeNavbar` with `constructor(host: HTMLElement, resolved: ResolvedSlot[])`, `render(activeIndex: number): void`, `setProgress(activeIndex: number, progress: number): void`, `onSelect: (index: number) => void`, `destroy(): void`.
+- Produces: `class PhoneChromeNavbar` with `constructor(host: HTMLElement, resolved: ResolvedSlot[])`, `render(activeIndex: number): void`, `setProgress(activeIndex: number, progress: number, targetIndex?: number): void`, `onSelect: (index: number) => void`, `destroy(): void`. `render()` is the **only** method allowed to read layout — it caches the measurements every `setProgress` frame reuses.
 
 The navbar draws itself and applies geometry. It holds no gesture logic and no leaf knowledge.
 
@@ -999,11 +1042,17 @@ import type { ResolvedSlot } from './hub-registry';
  * The phone hub navbar: a constant-width segmented row where only the active
  * slot carries a label.
  *
- * Every slot is laid out once at a fixed base width and then scaled with
- * `transform: scaleX()`; the label rides in its own layer so its text never
- * scales with the capsule. Nothing here animates `width` — that would be
- * layout thrash on iOS WebKit, which is the whole reason the geometry module
- * hands back numbers instead of styles.
+ * Fluidity contract (the reason this file looks the way it does):
+ * - Slots NEVER scale — a scaled slot stretches its icon and text. Each slot
+ *   is a fixed icon-sized box that only translates.
+ * - The capsule background is a 3-slice (left cap / 1px middle / right cap):
+ *   the caps translate and only the flat middle scales, so it can morph to
+ *   any width with pure transforms and perfect rounded corners. `scaleX` on
+ *   a rounded box would squash the radius; animating `width` is layout
+ *   thrash on iOS WebKit.
+ * - Layout is read ONCE per settled state (`render`), never during a
+ *   gesture: `setProgress` runs on every touchmove and works exclusively
+ *   from cached numbers.
  */
 export class PhoneChromeNavbar {
   /** Called when a slot is tapped. Wired by `hub-level.ts`. */
@@ -1012,7 +1061,14 @@ export class PhoneChromeNavbar {
   private readonly el: HTMLElement;
   private readonly slotEls: HTMLElement[] = [];
   private readonly labelEls: HTMLElement[] = [];
-  private activeIndex = 0;
+  private readonly bgEls: HTMLElement[] = [];
+  private readonly midEls: HTMLElement[] = [];
+  private readonly capREls: HTMLElement[] = [];
+  // Measured in render(), consumed untouched by every setProgress frame.
+  private barWidth = 0;
+  private iconWidth = 40;
+  private gap = 8;
+  private capWidth = 20;
 
   constructor(
     host: HTMLElement,
@@ -1024,6 +1080,14 @@ export class PhoneChromeNavbar {
       const slotEl = this.el.createDiv({ cls: 'portal-phone-slot' });
       slotEl.dataset.slot = entry.slot.id;
       slotEl.toggleClass('is-disabled', !entry.enabled);
+
+      // 3-slice capsule background, behind the icon. The left cap is static
+      // (parked at x:0 in CSS); only the middle and right cap ever move.
+      const bgEl = slotEl.createDiv({ cls: 'portal-phone-slot-bg' });
+      bgEl.createDiv({ cls: 'portal-phone-pill-cap mod-left' });
+      this.midEls.push(bgEl.createDiv({ cls: 'portal-phone-pill-mid' }));
+      this.capREls.push(bgEl.createDiv({ cls: 'portal-phone-pill-cap mod-right' }));
+      this.bgEls.push(bgEl);
 
       const iconEl = slotEl.createDiv({ cls: 'portal-phone-slot-icon' });
       setIcon(iconEl, entry.slot.icon);
@@ -1040,52 +1104,70 @@ export class PhoneChromeNavbar {
     });
   }
 
-  /** Snap the bar to a settled state (used on mount and after a snap). */
+  /** Snap the bar to a settled state (mount, tap, or post-gesture). The ONLY
+   *  place that reads layout — gesture frames reuse what this cached. */
   render(activeIndex: number): void {
-    this.activeIndex = activeIndex;
+    this.barWidth = this.el.clientWidth;
+    if (this.barWidth > 0) {
+      const styles = getComputedStyle(this.el);
+      this.iconWidth =
+        parseFloat(styles.getPropertyValue('--portal-phone-icon-size')) || 40;
+      this.gap = parseFloat(styles.getPropertyValue('--portal-phone-gap')) || 8;
+      this.capWidth = this.iconWidth / 2;
+    }
     this.el.toggleClass('is-animating', true);
-    this.apply(activeIndex, 0);
+    this.apply(activeIndex, 0, undefined);
   }
 
-  /** Drive the bar from live gesture progress. No transitions while dragging:
-   *  the finger IS the animation, and a CSS transition would lag behind it. */
-  setProgress(activeIndex: number, progress: number): void {
-    this.activeIndex = activeIndex;
+  /** Drive the bar from live gesture progress. No transitions and no layout
+   *  reads while dragging: the finger IS the animation, and a forced layout
+   *  per touchmove is exactly the jank this design exists to avoid. */
+  setProgress(activeIndex: number, progress: number, targetIndex?: number): void {
     this.el.toggleClass('is-animating', false);
-    this.apply(activeIndex, progress);
+    this.apply(activeIndex, progress, targetIndex);
   }
 
   destroy(): void {
     this.el.remove();
   }
 
-  private apply(activeIndex: number, progress: number): void {
-    const barWidth = this.el.clientWidth;
-    if (barWidth === 0) return; // not laid out yet; a later call will catch it
-
-    const styles = getComputedStyle(this.el);
-    const iconWidth = parseFloat(styles.getPropertyValue('--portal-phone-icon-size')) || 40;
-    const gap = parseFloat(styles.getPropertyValue('--portal-phone-gap')) || 8;
+  private apply(
+    activeIndex: number,
+    progress: number,
+    targetIndex: number | undefined,
+  ): void {
+    if (this.barWidth === 0) return; // not laid out yet; a later render catches it
 
     const pills = layoutPills({
       slotCount: this.slotEls.length,
       activeIndex,
       progress,
-      barWidth,
-      iconWidth,
-      gap,
+      targetIndex,
+      barWidth: this.barWidth,
+      iconWidth: this.iconWidth,
+      gap: this.gap,
     });
 
     pills.forEach((pill, i) => {
       const slotEl = this.slotEls[i];
+      const bgEl = this.bgEls[i];
+      const midEl = this.midEls[i];
+      const capREl = this.capREls[i];
       const labelEl = this.labelEls[i];
-      if (!slotEl || !labelEl) return;
-      // Base box is `iconWidth` wide; scaleX carries it to the target width.
-      slotEl.style.transform =
-        `translateX(${pill.x}px) scaleX(${pill.width / iconWidth})`;
+      if (!slotEl || !bgEl || !midEl || !capREl || !labelEl) return;
+
+      // The slot box never changes size — icons and text cannot distort.
+      slotEl.style.transform = `translateX(${pill.x}px)`;
+
+      // Capsule morph: caps translate, only the flat 1px middle scales.
+      const midWidth = Math.max(0, pill.width - 2 * this.capWidth);
+      midEl.style.transform =
+        `translateX(${this.capWidth}px) scaleX(${midWidth})`;
+      capREl.style.transform = `translateX(${pill.width - this.capWidth}px)`;
+
+      // Wash and label share the expansion share as their opacity.
+      bgEl.style.opacity = String(pill.labelOpacity);
       labelEl.style.opacity = String(pill.labelOpacity);
-      // Undo the capsule's horizontal scale so the text is never stretched.
-      labelEl.style.transform = `scaleX(${iconWidth / pill.width})`;
       slotEl.toggleClass('is-active', i === activeIndex);
     });
   }
@@ -1098,9 +1180,11 @@ Append to `styles.css`. Note the contract: no raw `ms`/hex/`cubic-bezier` outsid
 
 ```css
 /* --- phone chrome: hub navbar ----------------------------------------------
-   Constant-width segmented row. Slots are laid out at a fixed base box and
-   moved/scaled with transform only — animating width here would thrash layout
-   on iOS WebKit, which is exactly what the gesture cannot afford. */
+   Constant-width segmented row. Fluidity contract: slots are fixed icon-sized
+   boxes that ONLY translate (nothing that contains an icon or text is ever
+   scaled), and the capsule background is a 3-slice — caps carry the radius
+   and translate, the flat 1px middle scales. Everything the gesture animates
+   is transform+opacity; `width` never moves. */
 .portal-phone-navbar {
   --portal-phone-icon-size: 40px;
   --portal-phone-gap: 8px;
@@ -1115,35 +1199,56 @@ Append to `styles.css`. Note the contract: no raw `ms`/hex/`cubic-bezier` outsid
   inset-block: 0;
   left: 0;
   width: var(--portal-phone-icon-size);
-  transform-origin: left center;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--size-4-1, 4px);
-  border-radius: var(--radius-l, 12px);
-  background-color: transparent;
   color: var(--text-muted);
   will-change: transform;
 }
 
-.portal-phone-navbar.is-animating .portal-phone-slot {
-  transition: transform var(--portal-motion);
-}
-
 .portal-phone-slot.is-active {
-  background-color: var(--portal-wash);
   color: var(--text-normal);
-}
-
-.portal-phone-navbar.is-animating .portal-phone-slot.is-active {
-  transition:
-    transform var(--portal-motion),
-    background-color var(--portal-wash-motion),
-    color var(--portal-wash-motion);
 }
 
 .portal-phone-slot.is-disabled {
   color: var(--text-faint);
+}
+
+/* 3-slice capsule wash. The wrapper only fades; its slices only transform. */
+.portal-phone-slot-bg {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 0;
+  overflow: visible;
+  opacity: 0;
+  will-change: opacity;
+}
+
+.portal-phone-pill-cap,
+.portal-phone-pill-mid {
+  position: absolute;
+  inset-block: 0;
+  background-color: var(--portal-wash);
+  will-change: transform;
+}
+
+.portal-phone-pill-cap {
+  width: calc(var(--portal-phone-icon-size) / 2);
+}
+
+.portal-phone-pill-cap.mod-left {
+  border-radius: var(--radius-l, 12px) 0 0 var(--radius-l, 12px);
+}
+
+.portal-phone-pill-cap.mod-right {
+  border-radius: 0 var(--radius-l, 12px) var(--radius-l, 12px) 0;
+}
+
+/* 1px base box: scaleX(n) makes it exactly n px wide with zero layout. */
+.portal-phone-pill-mid {
+  width: 1px;
+  transform-origin: left center;
 }
 
 .portal-phone-slot-icon {
@@ -1152,19 +1257,29 @@ Append to `styles.css`. Note the contract: no raw `ms`/hex/`cubic-bezier` outsid
   align-items: center;
 }
 
-/* Counter-scaled against the capsule so the text never stretches. */
+/* Anchored past the icon box; fades with the expansion share, never scales. */
 .portal-phone-slot-label {
-  transform-origin: left center;
+  position: absolute;
+  left: var(--portal-phone-icon-size);
   white-space: nowrap;
   overflow: hidden;
+  max-width: 200px;
   font-size: var(--font-ui-small);
-  will-change: opacity, transform;
+  opacity: 0;
+  will-change: opacity;
 }
 
+/* Settled-state motion only — while dragging, .is-animating is off and the
+   finger drives every frame directly. */
+.portal-phone-navbar.is-animating .portal-phone-slot,
+.portal-phone-navbar.is-animating .portal-phone-pill-cap,
+.portal-phone-navbar.is-animating .portal-phone-pill-mid {
+  transition: transform var(--portal-motion);
+}
+
+.portal-phone-navbar.is-animating .portal-phone-slot-bg,
 .portal-phone-navbar.is-animating .portal-phone-slot-label {
-  transition:
-    opacity var(--portal-wash-motion),
-    transform var(--portal-motion);
+  transition: opacity var(--portal-wash-motion);
 }
 ```
 
@@ -1256,9 +1371,12 @@ const RUBBER_BAND_FACTOR = 0.35;
 export class PhoneChromePager {
   private startX = 0;
   private startY = 0;
-  private startTime = 0;
   private lastX = 0;
   private lastTime = 0;
+  private prevX = 0;
+  private prevTime = 0;
+  /** Host width, measured once when a gesture claims — never per frame. */
+  private width = 1;
   private state: 'idle' | 'pending' | 'dragging' | 'released' = 'idle';
   private neighbour: HTMLElement | null = null;
   private direction: 1 | -1 = 1;
@@ -1269,8 +1387,9 @@ export class PhoneChromePager {
     this.startX = touch.clientX;
     this.startY = touch.clientY;
     this.lastX = touch.clientX;
-    this.startTime = evt.timeStamp;
     this.lastTime = evt.timeStamp;
+    this.prevX = touch.clientX;
+    this.prevTime = evt.timeStamp;
     this.state = 'pending';
     this.neighbour = null;
   };
@@ -1295,17 +1414,20 @@ export class PhoneChromePager {
       this.direction = dx < 0 ? 1 : -1;
       this.neighbour = this.callbacks.onClaim(this.direction);
       this.state = 'dragging';
+      // The one layout read of the gesture — every frame after reuses it.
+      this.width = this.host.clientWidth || 1;
     }
 
     // Claimed: the browser must not also scroll or trigger a native gesture.
     evt.preventDefault();
 
-    const width = this.host.clientWidth || 1;
-    const raw = -dx / width; // left drag → positive progress → next slot
+    const raw = -dx / this.width; // left drag → positive progress → next slot
     const progress = this.neighbour
       ? Math.max(-1, Math.min(1, raw))
       : raw * RUBBER_BAND_FACTOR;
 
+    this.prevX = this.lastX;
+    this.prevTime = this.lastTime;
     this.lastX = touch.clientX;
     this.lastTime = evt.timeStamp;
     this.callbacks.onProgress(progress);
@@ -1317,14 +1439,15 @@ export class PhoneChromePager {
       return;
     }
 
-    const width = this.host.clientWidth || 1;
     const dx = this.lastX - this.startX;
-    const progress = Math.max(-1, Math.min(1, -dx / width));
+    const progress = Math.max(-1, Math.min(1, -dx / this.width));
 
-    // Progress-per-ms over the last move, matching decideSnap's unit. Use the
-    // whole gesture when the last move carries no measurable interval.
-    const elapsed = Math.max(1, this.lastTime - this.startTime);
-    const velocity = progress / elapsed;
+    // INSTANTANEOUS velocity from the last two samples, in progress-per-ms —
+    // decideSnap's unit. An average over the whole gesture would dilute a
+    // flick thrown at the end of a slow drag, which is precisely the case
+    // flick detection exists for.
+    const dt = Math.max(1, this.lastTime - this.prevTime);
+    const velocity = -(this.lastX - this.prevX) / this.width / dt;
 
     const decision = this.neighbour
       ? decideSnap(progress, velocity, this.callbacks.activeIndex(), this.callbacks.slotCount())
@@ -1393,7 +1516,12 @@ import { Platform } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import type PortalPlugin from '../main';
 import { executeCommand, isCommandRegistered, isViewTypeRegistered } from '../obsidian-internals';
-import { firstEnabledIndex, resolveSlots, type ResolvedSlot } from './hub-registry';
+import {
+  firstEnabledIndex,
+  nextPageableIndex,
+  resolveSlots,
+  type ResolvedSlot,
+} from './hub-registry';
 import { PhoneChromeNavbar } from './navbar';
 import { PhoneChromePager } from './pager';
 
@@ -1429,6 +1557,15 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
   let container: HTMLElement | null = null;
   let resolved: ResolvedSlot[] = [];
   let activeIndex = 0;
+  /** Per-gesture cache, filled at claim and reused by every frame. Gesture
+   *  frames must never query the workspace or force layout — that is the
+   *  fluidity contract, and this object is how the hub honours it. */
+  let gesture: {
+    targetIndex: number;
+    currentEl: HTMLElement;
+    neighbourEl: HTMLElement;
+    width: number;
+  } | null = null;
 
   const slotLeaves = (): (WorkspaceLeaf | null)[] =>
     resolved.map(({ slot, enabled }) => {
@@ -1450,7 +1587,7 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
     if (!container) return;
     for (const el of Array.from(container.children) as HTMLElement[]) {
       el.style.transform = '';
-      el.removeClass(PEEK_CLASS);
+      el.classList.remove(PEEK_CLASS, 'portal-phone-dragging', 'portal-phone-settling');
     }
   };
 
@@ -1507,12 +1644,14 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
       slotCount: () => resolved.length,
       activeIndex: () => activeIndex,
       onClaim: (direction) => {
-        const index = activeIndex + direction;
-        // Command slots have no leaf to slide into → rubber-band instead.
-        if (!resolved[index]?.pageable) return null;
-        const target = slotLeaves()[index];
-        const el = leafEl(target);
-        if (!target || !el) return null;
+        // Spec: disabled and tap-only slots are SKIPPED by the pager, so the
+        // destination is the nearest pageable slot, not blindly ±1.
+        const targetIndex = nextPageableIndex(resolved, activeIndex, direction);
+        if (targetIndex === -1 || !container) return null;
+        const target = slotLeaves()[targetIndex];
+        const currentEl = leafEl(slotLeaves()[activeIndex]);
+        const neighbourEl = leafEl(target);
+        if (!target || !currentEl || !neighbourEl) return null;
         // Neighbour views are deferred at rest (Obsidian 1.7+): mounting one
         // here, at first contact, is what lets the swipe show real content
         // without keeping every hub view alive all the time. Fire and forget —
@@ -1520,27 +1659,69 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
         // an unresolved leaf simply renders empty for a frame.
         void target.loadIfDeferred();
         // Question A from the spike: force the sibling visible for the drag.
-        el.addClass(PEEK_CLASS);
-        return el;
+        neighbourEl.addClass(PEEK_CLASS);
+        // Promote both leaves to their own compositor layers for THIS drag
+        // only — permanent will-change on two viewport-sized elements would
+        // hold their textures in GPU memory for the whole session.
+        currentEl.addClass('portal-phone-dragging');
+        neighbourEl.addClass('portal-phone-dragging');
+        gesture = {
+          targetIndex,
+          currentEl,
+          neighbourEl,
+          // The claim's one layout read; every frame below reuses it.
+          width: container.clientWidth || 1,
+        };
+        return neighbourEl;
       },
       onProgress: (progress) => {
-        const current = leafEl(slotLeaves()[activeIndex]);
-        const neighbour = leafEl(slotLeaves()[activeIndex + (progress > 0 ? 1 : -1)]);
-        const width = container?.clientWidth ?? 0;
-        if (current) current.style.transform = `translateX(${-progress * width}px)`;
-        if (neighbour) {
-          const offset = progress > 0 ? width : -width;
-          neighbour.style.transform = `translateX(${offset - progress * width}px)`;
-        }
-        navbar?.setProgress(activeIndex, progress);
+        // Cached elements and width only — no queries, no layout, per frame.
+        if (!gesture) return;
+        const { currentEl, neighbourEl, width, targetIndex } = gesture;
+        currentEl.style.transform = `translateX(${-progress * width}px)`;
+        const offset = progress > 0 ? width : -width;
+        neighbourEl.style.transform = `translateX(${offset - progress * width}px)`;
+        navbar?.setProgress(activeIndex, progress, targetIndex);
       },
       onSettle: (decision) => {
-        if (decision === 'next') activeIndex += 1;
-        if (decision === 'prev') activeIndex -= 1;
-        const leaf = slotLeaves()[activeIndex];
-        clearTransforms();
-        if (leaf) plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
-        navbar?.render(activeIndex);
+        const settled = gesture;
+        gesture = null;
+        if (!settled) {
+          // Rubber-band release with no neighbour: nothing moved but the bar.
+          navbar?.render(activeIndex);
+          return;
+        }
+        const { currentEl, neighbourEl, width, targetIndex } = settled;
+        const goes = decision === 'next' || decision === 'prev';
+        const landing = goes ? targetIndex : activeIndex;
+        const dir = targetIndex > activeIndex ? 1 : -1;
+
+        // Finish the slide with a transition instead of jump-cutting: set the
+        // final transforms, let the panel easing play, then hand the leaf
+        // over and clean up. `transitionend` can be swallowed if the element
+        // is hidden mid-flight, so a timeout backstop always runs the
+        // epilogue exactly once.
+        currentEl.addClass('portal-phone-settling');
+        neighbourEl.addClass('portal-phone-settling');
+        currentEl.style.transform = goes
+          ? `translateX(${-dir * width}px)`
+          : 'translateX(0)';
+        neighbourEl.style.transform = goes
+          ? 'translateX(0)'
+          : `translateX(${dir * width}px)`;
+
+        let done = false;
+        const epilogue = (): void => {
+          if (done) return;
+          done = true;
+          clearTransforms();
+          activeIndex = landing;
+          const leaf = slotLeaves()[landing];
+          if (leaf) plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
+          navbar?.render(activeIndex);
+        };
+        currentEl.addEventListener('transitionend', epilogue, { once: true });
+        window.setTimeout(epilogue, 350);
       },
     });
   };
@@ -1559,18 +1740,34 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
     }
   };
 
+  /** px from each screen edge that Obsidian's drawer drag responds to. */
+  const DRAWER_EDGE_PX = 24;
+
   // Suppress Obsidian's edge-drag drawers while the chrome owns the hub.
   // Same technique as `mobile-header-back.ts`: a document-level capture
-  // listener runs before the target's own bubble-phase handler. Gated on the
-  // setting and on the chrome actually being mounted, so it is inert
-  // everywhere else in the app.
+  // listener runs before anything else sees the event. Gated on the setting
+  // and on the chrome actually being mounted, so it is inert everywhere else.
+  //
+  // CRITICAL: only edge-zone touches are swallowed. stopImmediatePropagation
+  // at document capture halts propagation toward the target entirely, so an
+  // unconditional swallow here would ALSO starve the pager's own touchstart
+  // listener on the container and kill the swipe. The drawer only ever
+  // reacts to edge drags, so killing the edge zone alone silences it while
+  // every other touch flows through to the pager untouched. Consequence: a
+  // swipe started in the outer 24px does not page — which matches how native
+  // apps treat the bezel.
   plugin.registerDomEvent(
     document,
     'touchstart',
     (evt: TouchEvent) => {
       if (!plugin.settings.phoneChrome || !container) return;
+      const touch = evt.touches[0];
       const target = evt.target as HTMLElement | null;
-      if (!target?.closest(`.${HUB_CLASS}`)) return;
+      if (!touch || !target?.closest(`.${HUB_CLASS}`)) return;
+      const nearEdge =
+        touch.clientX <= DRAWER_EDGE_PX ||
+        touch.clientX >= window.innerWidth - DRAWER_EDGE_PX;
+      if (!nearEdge) return;
       evt.stopImmediatePropagation();
     },
     { capture: true },
@@ -1599,12 +1796,30 @@ Append to `styles.css`:
 
 .portal-phone-hub > .workspace-leaf.portal-phone-peek {
   display: flex;
+}
+
+/* Layer promotion is GESTURE-SCOPED: two viewport-sized leaves with permanent
+   will-change would hold their textures in GPU memory for the whole session.
+   The class goes on at claim and comes off in the settle epilogue. */
+.portal-phone-hub > .workspace-leaf.portal-phone-dragging {
   will-change: transform;
+}
+
+/* Post-release glide to the resting position — the alternative is a
+   jump-cut the moment the finger lifts. The 350ms epilogue backstop in
+   hub-level.ts must stay ≥ this duration. */
+.portal-phone-hub > .workspace-leaf.portal-phone-settling {
+  transition: transform var(--cosmos-t-panel, 250ms)
+    var(--cosmos-native, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
 @media (prefers-reduced-motion: reduce) {
   .portal-phone-navbar.is-animating .portal-phone-slot,
-  .portal-phone-navbar.is-animating .portal-phone-slot-label {
+  .portal-phone-navbar.is-animating .portal-phone-pill-cap,
+  .portal-phone-navbar.is-animating .portal-phone-pill-mid,
+  .portal-phone-navbar.is-animating .portal-phone-slot-bg,
+  .portal-phone-navbar.is-animating .portal-phone-slot-label,
+  .portal-phone-hub > .workspace-leaf.portal-phone-settling {
     transition: none;
   }
 }
@@ -1678,6 +1893,7 @@ Record a real PASS/FAIL for each, with what you actually saw:
 11b. Tapping the command-backed `daily` slot runs the command; swiping toward it rubber-bands instead of paging.
 12. Turning the setting off restores stock behaviour immediately, with no reload.
 13. With iOS "Reduce Motion" on, paging is instant and nothing animates.
+14. Fluidity: the drag tracks the finger with no visible stutter (test on a ProMotion iPhone if available); icons, labels, and the capsule's rounded caps never distort mid-swipe; after release the content glides to its resting place instead of jump-cutting; a fast flick at the end of a slow drag commits the page turn.
 
 - [ ] **Step 3: Write the sign-off document**
 
@@ -1705,3 +1921,5 @@ Report the checklist verbatim, then ask whether `phoneChrome` should stay defaul
 **Deploy through the build.** `pnpm build` writes `main.js` into the vault via `.obsidian-plugin-dir`. Never copy the repo-root `main.js` by hand — it goes stale silently.
 
 **Never `git add -A`.** Stage the exact paths listed in each commit step.
+
+**Fluidity contract (cross-cutting, non-negotiable).** Gesture frames — `setProgress` and `onProgress` — may write transforms and opacity and nothing else: no layout reads (`clientWidth`, `getComputedStyle`), no workspace queries, no DOM traversal. Everything a frame needs is measured once and cached: by `render()` for the bar, at claim time for the leaves. `will-change` on the full-screen leaves is gesture-scoped (`portal-phone-dragging`) because permanent layers for two viewport-sized elements is real GPU memory on an iPhone. The capsule morphs as a 3-slice so no rounded corner is ever scaled and no icon ever stretches. Velocity is instantaneous (last two samples), not a whole-gesture average — that difference is exactly what makes a flick feel like a flick. The drawer suppression swallows ONLY edge-zone touches; an unconditional swallow at document capture would starve the pager's own listeners and kill the feature.
