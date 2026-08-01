@@ -4,8 +4,6 @@ import { installCoreIcons } from './icons/core-icons';
 import { installMobileHeaderBack } from './nav/mobile-header-back';
 import { installNoteEnter } from './nav/note-enter';
 import { installPhoneChrome } from './phone-chrome/hub-level';
-// SPIKE — throwaway, removed with src/phone-chrome/spike.ts once Task 1 answers.
-import { installSpike } from './phone-chrome/spike';
 import { installTabDedupe } from './nav/tab-dedupe';
 import { PortalView, PORTAL_VIEW_TYPE } from './portal-view';
 import {
@@ -78,9 +76,6 @@ export default class PortalPlugin extends Plugin {
 
     // Phone-only: segmented hub navbar with a swipe pager (default off).
     installPhoneChrome(this);
-
-    // SPIKE — throwaway device probe, removed once Task 1 is answered.
-    installSpike(this);
 
     // Re-apply the hide whenever the layout changes, so a file-explorer leaf
     // the user re-adds (e.g. via the "Files" ribbon) gets hidden again.
