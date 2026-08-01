@@ -1,6 +1,6 @@
-import { Plugin, addIcon } from 'obsidian';
+import { Plugin } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
-import { installCoreIcons } from './icons/core-icons';
+import { installMvIcons } from './kit/mv-icons';
 import { installMobileHeaderBack } from './nav/mobile-header-back';
 import { installNoteEnter } from './nav/note-enter';
 import { installPhoneChrome } from './phone-chrome/hub-level';
@@ -12,16 +12,6 @@ import {
   PortalSettingTab,
   type PortalSettings,
 } from './settings';
-
-// Huge Icons (hugeicons.com, free/MIT, Stroke Rounded, 24x24 grid) — same
-// pattern as nav-block.ts's hi-* set. addIcon() always wraps content in a
-// fixed viewBox="0 0 100 100", so a 4.166667x scale (100/24) fills it right.
-addIcon(
-  'hi-panel-left',
-  '<g transform="scale(4.166667)" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">' +
-    '<path d="M13 3h-2C7.229 3 5.343 3 4.172 4.172S3 7.229 3 11v2c0 3.771 0 5.657 1.172 6.828S7.229 21 11 21h2c3.771 0 5.657 0 6.828-1.172S21 16.771 21 13v-2c0-3.771 0-5.657-1.172-6.828S16.771 3 13 3M9 3v18"/>' +
-    '</g>',
-);
 
 /** Class applied to the native file-explorer's `.workspace-leaf` to hide it.
  *  Applied in JS (not via a `[data-type]` CSS selector) because the view type
@@ -38,14 +28,22 @@ const FILE_EXPLORER_TYPE = 'file-explorer';
  */
 export default class PortalPlugin extends Plugin {
   settings: PortalSettings = DEFAULT_SETTINGS;
+  /** Re-syncs the phone hub chrome against current settings/workspace state
+   *  — a no-op on desktop. Exposed so the settings tab's `phoneChrome`
+   *  toggle can apply live instead of waiting for the next
+   *  layout-change/active-leaf-change. Assigned in `onload()`. */
+  syncPhoneChrome: () => void = () => {};
 
   async onload(): Promise<void> {
     this.settings = parseSettings(await this.loadData());
 
-    // Re-skin Obsidian's core Lucide icons with Huge Icons before any view or
-    // chrome renders. Only when the setting is on; there is no runtime undo, so
-    // disabling it takes effect on the next app restart (see setting desc).
-    if (this.settings.hugeCoreIcons) installCoreIcons();
+    // Re-skin Obsidian's Lucide icons with the Phosphor `fill` set before any
+    // view or chrome renders. This writes into Obsidian's global icon registry,
+    // so it also re-skins every other plugin that calls setIcon() — that is how
+    // the whole suite changes set without any of them being modified.
+    // No runtime undo exists, so disabling it takes effect on the next app
+    // restart (surfaced in the setting description).
+    if (this.settings.mvIcons) installMvIcons();
 
     this.registerView(
       PORTAL_VIEW_TYPE,
@@ -75,7 +73,7 @@ export default class PortalPlugin extends Plugin {
     installMobileHeaderBack(this);
 
     // Phone-only: segmented hub navbar with a swipe pager (default off).
-    installPhoneChrome(this);
+    this.syncPhoneChrome = installPhoneChrome(this);
 
     // Re-apply the hide whenever the layout changes, so a file-explorer leaf
     // the user re-adds (e.g. via the "Files" ribbon) gets hidden again.

@@ -202,9 +202,25 @@
   outline: none;
 }
 
+/* The unified icon set is SOLID: every glyph is a filled shape, no outline.
+   Obsidian and most themes style `.svg-icon` for the stock Lucide set, which is
+   stroke-based — typically `fill: none; stroke: currentColor`. CSS beats SVG
+   presentation attributes, so without this rule a theme's `fill: none` would
+   erase every glyph and its stroke-width would draw hairlines around them.
+
+   The `scale(0.390625)` transform is the marker: it is the wrapper addIcon()
+   requires to map the Phosphor 256 grid onto its fixed 100 viewBox, so it is
+   present on our glyphs and on nothing else. Wins on specificity, not
+   `!important` — see the design-contract rule. */
+.svg-icon g[transform='scale(0.390625)'],
+.svg-icon g[transform='scale(0.390625)'] path {
+  fill: currentColor;
+  stroke: none;
+}
+
 /* Per-row leaf icon (folder / file / #tag), left of the label. Sized off
-   Obsidian's own --icon-size so it matches native icons (nav buttons,
-   Iconize-assigned icons) 1:1 instead of an arbitrary close-but-off value. */
+   Obsidian's own --icon-size so it matches native icons (nav buttons, chrome)
+   1:1 instead of an arbitrary close-but-off value. */
 .portal-row-icon {
   display: inline-flex;
   align-items: center;

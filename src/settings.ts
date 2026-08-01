@@ -57,14 +57,23 @@ export interface PortalSettings {
   /** Persistent top-to-bottom section order, including hidden sections. */
   sectionOrder: PortalSectionKey[];
   /** Folder paths (exact, vault-relative) never rendered in the Folders tree —
-   *  for vault-internal asset directories (e.g. a custom Iconize icon pack)
-   *  that must live in synced vault content but aren't knowledge to browse. */
+   *  for vault-internal asset directories that must live in synced vault
+   *  content but aren't knowledge to browse. */
   hiddenFolders: string[];
-  /** Override Obsidian's core Lucide icons (menus, ribbon, mobile navbar,
-   *  settings) with Huge Icons glyphs so the whole app speaks one iconographic
-   *  language. Default ON. There is no runtime undo for `addIcon()`, so turning
-   *  this OFF only takes effect after an app restart. */
-  hugeCoreIcons: boolean;
+  /** Re-skin Obsidian's Lucide icons with the Phosphor `fill` set, so the whole
+   *  app — core chrome AND every plugin that calls `setIcon()` — speaks one
+   *  iconographic language. Default ON. There is no runtime undo for
+   *  `addIcon()`, so turning this OFF only takes effect after an app restart. */
+  mvIcons: boolean;
+  /** Folder path → icon name, the tree's per-folder icon overrides.
+   *
+   *  This replaces reading Iconize's (`obsidian-icon-folder`) assignments at
+   *  runtime. Iconize resolved icons late — by string, from the filesystem —
+   *  which is why a wrong name, an unsynced pack or a cold cache all degraded
+   *  silently instead of failing. Here the name resolves against glyphs already
+   *  compiled into the bundle, so an unknown name is detectable immediately
+   *  (`mvHasIcon`) and simply falls back to the default folder glyph. */
+  folderIcons: Record<string, string>;
   /** Phone-only: the header's top-left drawer toggle goes Back when there is
    *  navigation history, and only opens the menu (its native behaviour) when
    *  there is nothing to go back to. Default ON. Applies live. */
@@ -91,7 +100,10 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   sectionOrder: [...PORTAL_SECTION_KEYS],
   desktopNoteTransition: false,
   hiddenFolders: [],
-  hugeCoreIcons: true,
+  mvIcons: true,
+  // Empty by design: Portal ships to other vaults, so folder→icon choices are
+  // user config, never defaults baked into the plugin.
+  folderIcons: {},
   mobileHeaderBack: true,
   phoneChrome: false,
   phoneChromeSlots: [...DEFAULT_PHONE_CHROME_SLOTS],
@@ -102,9 +114,26 @@ const asStringArray = (value: unknown, fallback: string[]): string[] =>
     ? (value as string[])
     : fallback;
 
+/** Flat string→string map, dropping any entry that isn't one. Unlike the array
+ *  helper this keeps the valid pairs instead of discarding the whole object:
+ *  one malformed folder icon shouldn't cost the user all the others. */
+const asStringRecord = (
+  value: unknown,
+  fallback: Record<string, string>,
+): Record<string, string> => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return fallback;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(value)) if (typeof v === 'string') out[k] = v;
+  return out;
+};
+
 /** Defensive parse of persisted data — every field falls back to its default. */
 export function parseSettings(raw: unknown): PortalSettings {
-  const data = (raw ?? {}) as Partial<PortalSettings>;
+  // `hugeCoreIcons` is a legacy field name (pre-mvIcons rename) that can
+  // still be present in an existing install's persisted data.json; it is no
+  // longer part of `PortalSettings` itself, so it is typed here rather than
+  // widening the settings interface for a one-time migration read below.
+  const data = (raw ?? {}) as Partial<PortalSettings> & { hugeCoreIcons?: unknown };
   const sortBy: SortMode =
     data.sortBy === 'modified' || data.sortBy === 'created' ? data.sortBy : 'name';
   return {
@@ -136,10 +165,15 @@ export function parseSettings(raw: unknown): PortalSettings {
     enabledSections: parseEnabledSections(data.enabledSections),
     sectionOrder: parseSectionOrder(data.sectionOrder),
     hiddenFolders: asStringArray(data.hiddenFolders, DEFAULT_SETTINGS.hiddenFolders),
-    hugeCoreIcons:
-      typeof data.hugeCoreIcons === 'boolean'
-        ? data.hugeCoreIcons
-        : DEFAULT_SETTINGS.hugeCoreIcons,
+    mvIcons:
+      typeof data.mvIcons === 'boolean'
+        ? data.mvIcons
+        : // `hugeCoreIcons` was this flag's name while the set was Huge Icons.
+          // Read it once so an existing install keeps the user's choice.
+          typeof data.hugeCoreIcons === 'boolean'
+          ? data.hugeCoreIcons
+          : DEFAULT_SETTINGS.mvIcons,
+    folderIcons: asStringRecord(data.folderIcons, DEFAULT_SETTINGS.folderIcons),
     mobileHeaderBack:
       typeof data.mobileHeaderBack === 'boolean'
         ? data.mobileHeaderBack
@@ -181,17 +215,15 @@ export class PortalSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Huge core icons')
+      .setName('Unified icon set')
       .setDesc(
-        'Re-skin Obsidian’s own icons (menus, ribbon, mobile navbar, settings) with Huge Icons so the whole app matches Portal. Turning this off takes effect only after an app restart — icon overrides cannot be undone at runtime.',
+        'Re-skin Obsidian’s icons with the Phosphor solid set, so the app’s own chrome and every plugin that draws an icon match. Turning this off takes effect only after an app restart — icon overrides cannot be undone at runtime.',
       )
       .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.hugeCoreIcons)
-          .onChange(async (value) => {
-            this.plugin.settings.hugeCoreIcons = value;
-            await this.plugin.saveSettings();
-          }),
+        toggle.setValue(this.plugin.settings.mvIcons).onChange(async (value) => {
+          this.plugin.settings.mvIcons = value;
+          await this.plugin.saveSettings();
+        }),
       );
 
     new Setting(containerEl)
@@ -221,6 +253,11 @@ export class PortalSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.phoneChrome = value;
             await this.plugin.saveSettings();
+            // Apply live: without this, turning the toggle OFF leaves the
+            // navbar mounted and the pager's document-capture touch
+            // listeners swallowing touches until the next
+            // layout-change/active-leaf-change.
+            this.plugin.syncPhoneChrome();
           }),
       );
 
