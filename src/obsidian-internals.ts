@@ -186,14 +186,27 @@ interface AppWithCommandRegistry {
 
 /** True when a view type is registered (its plugin is installed and enabled).
  *  `viewRegistry.viewByType` is untyped but long-stable; a structural miss
- *  returns false so a slot degrades to disabled rather than throwing. */
+ *  returns false so a slot degrades to disabled rather than throwing.
+ *  Own-property check, not `in` — `in` walks the prototype chain, so a slot
+ *  misconfigured with `viewType: 'constructor'` would otherwise resolve as
+ *  registered against any plain object. (`Object.prototype.hasOwnProperty`
+ *  rather than `Object.hasOwn` — this project's `tsconfig` lib is ES2021.) */
 export function isViewTypeRegistered(app: App, type: string): boolean {
   const registry = (app as unknown as AppWithViewRegistry).viewRegistry?.viewByType;
-  return typeof registry === 'object' && registry !== null && type in registry;
+  return (
+    typeof registry === 'object' &&
+    registry !== null &&
+    Object.prototype.hasOwnProperty.call(registry, type)
+  );
 }
 
-/** True when a command id exists. Same defensive posture as above. */
+/** True when a command id exists. Same defensive posture as above, including
+ *  the own-property guard against prototype-chain false positives. */
 export function isCommandRegistered(app: App, id: string): boolean {
   const registry = (app as unknown as AppWithCommandRegistry).commands?.commands;
-  return typeof registry === 'object' && registry !== null && id in registry;
+  return (
+    typeof registry === 'object' &&
+    registry !== null &&
+    Object.prototype.hasOwnProperty.call(registry, id)
+  );
 }
