@@ -113,13 +113,60 @@ test('glyphs are solid (fill), not stroked', () => {
 
 test('registers a broad set, not a token handful', () => {
   const keys = source.match(/^ {2}'[a-z0-9-]+':/gm) ?? [];
-  assert.ok(keys.length >= 100, `expected 100+ registered names, found ${keys.length}`);
+  assert.ok(keys.length >= 500, `expected 500+ registered names, found ${keys.length}`);
+});
+
+test('covers every Lucide name observed in this vault’s live chrome', () => {
+  // Sampled from the real DOM (ribbon, tab bar, view header, editor toolbars).
+  // A partial override is worse than none: it leaves a visible mix of filled
+  // and outlined glyphs side by side, which is exactly the bug this closes.
+  const inChrome = [
+    'file-search', 'git-fork', 'wand-2', 'quote', 'terminal', 'terminal-square',
+    'zoom-in', 'plane-takeoff', 'remove-formatting', 'sort-asc', 'layout-dashboard',
+    'layout-list', 'list-ordered', 'message-square', 'move-vertical', 'strikethrough',
+    'italic', 'bold', 'heading', 'tags', 'wrench', 'pin', 'send', 'eye', 'rotate-ccw',
+  ];
+  for (const key of inChrome) {
+    assert.ok(source.includes(`'${key}':`), `missing chrome icon: ${key}`);
+  }
 });
 
 test('exposes the install entry point and its diagnostics', () => {
   assert.match(source, /export function installMvIcons\(\): void/);
   assert.match(source, /export const MV_ICON_COUNT/);
   assert.match(source, /export function mvHasIcon/);
+});
+
+test('can repaint icons already in the DOM', () => {
+  // addIcon() updates the registry but never the DOM, so anything drawn before
+  // install stays on the old glyph for the whole session. Without this the
+  // chrome built at startup never changes, no matter how many restarts.
+  assert.match(source, /export function refreshRenderedIcons/);
+  // It must key off Obsidian's `lucide-<name>` marker class...
+  assert.match(source, /lucide-\(\[a-z0-9-\]\+\)/);
+  // ...and swap the <svg> itself, never redraw onto the parent: many of those
+  // parents also hold the button's label, which setIcon() would wipe.
+  assert.match(source, /\.replaceWith\(fresh\)/);
+  assert.ok(
+    !/setIcon\(\s*svg\.parentElement/.test(source),
+    'must not redraw onto the parent element',
+  );
+});
+
+test('repaints icons in freshly rendered markdown', () => {
+  // Obsidian draws the code-block "copy" button inline while rendering, not
+  // through the icon registry, so overriding the registry never reaches it.
+  // A markdown post processor runs exactly where those appear.
+  const main = readFileSync(new URL('../main.ts', import.meta.url), 'utf8');
+  assert.match(main, /registerMarkdownPostProcessor\(/);
+  assert.match(main, /refreshRenderedIcons\(el\)/);
+});
+
+test('accepts a scoped root, so callers can repaint one subtree', () => {
+  assert.match(source, /refreshRenderedIcons\(root: ParentNode = document\)/);
+  // Guards against being handed something without a query API (a text node
+  // from a post processor, a document fragment in an older Obsidian).
+  assert.match(source, /typeof \(root as Element\)\.querySelectorAll !== 'function'/);
 });
 
 test('is mobile-safe: no Node/Electron builtins', () => {

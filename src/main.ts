@@ -1,6 +1,6 @@
 import { Plugin } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
-import { installMvIcons } from './kit/mv-icons';
+import { installMvIcons, refreshRenderedIcons } from './kit/mv-icons';
 import { installMobileHeaderBack } from './nav/mobile-header-back';
 import { installNoteEnter } from './nav/note-enter';
 import { installPhoneChrome } from './phone-chrome/hub-level';
@@ -80,18 +80,40 @@ export default class PortalPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on('layout-change', () => {
         this.applyExplorerVisibility();
+        this.scheduleIconRefresh();
       }),
     );
+
+    // Opening a note builds chrome that `layout-change` doesn't announce — the
+    // editor's formatting toolbar most visibly — so those icons need their own
+    // trigger or they stay Lucide while everything around them is filled.
+    this.registerEvent(
+      this.app.workspace.on('active-leaf-change', () => this.scheduleIconRefresh()),
+    );
+    this.registerEvent(this.app.workspace.on('file-open', () => this.scheduleIconRefresh()));
 
     // Open the rail and apply the hide only once the workspace is ready — this
     // also guards later units against the create-event storm on vault load.
     this.app.workspace.onLayoutReady(() => {
       void this.activateView(false);
       this.applyExplorerVisibility();
+      // Chrome built before this plugin loaded still holds Lucide glyphs;
+      // addIcon() never rewrites the DOM, so they have to be swapped by hand.
+      this.scheduleIconRefresh();
+    });
+
+    // Some icons are drawn inline while markdown renders — the code-block
+    // "copy" button is the one that shows — instead of going through the icon
+    // registry, so overriding the registry never reaches them. The post
+    // processor runs on each rendered block, which is exactly where they
+    // appear, and is a documented API rather than a DOM-watching guess.
+    this.registerMarkdownPostProcessor((el) => {
+      if (this.settings.mvIcons) refreshRenderedIcons(el);
     });
   }
 
   onunload(): void {
+    for (const id of this.iconRefreshTimers ?? []) window.clearTimeout(id);
     // Always restore the native explorer so disabling Portal never leaves it
     // permanently hidden.
     this.setExplorerHidden(false);
@@ -100,6 +122,36 @@ export default class PortalPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+  }
+
+  /** Deliberately initialised lazily rather than with a class-field
+   *  initializer: at runtime this property was observed to be `undefined` when
+   *  `scheduleIconRefresh` first ran, which made `.length` throw and silently
+   *  abort the rest of the `onLayoutReady` callback — the icon sweep never ran
+   *  and the cause was invisible. `??=` removes the dependency on when field
+   *  initializers are applied by the bundler. */
+  private iconRefreshTimers?: number[];
+
+  /** Sweep stale Lucide glyphs out of the DOM, coalesced.
+   *
+   *  Two passes, not one. Obsidian builds chrome in stages: the workspace
+   *  arrives with the event, but pieces like the editor's formatting toolbar
+   *  are constructed a beat later. A single immediate sweep consistently misses
+   *  those and leaves a visible mix of filled and outlined glyphs.
+   *
+   *  The selector is narrow enough that a sweep finding nothing costs almost
+   *  nothing, which is the steady state: only icons drawn before
+   *  `installMvIcons()` — or drawn inline, bypassing the registry — ever match. */
+  private scheduleIconRefresh(): void {
+    const timers = (this.iconRefreshTimers ??= []);
+    if (!this.settings.mvIcons || timers.length) return;
+    for (const delay of [50, 600]) {
+      const id = window.setTimeout(() => {
+        this.iconRefreshTimers = (this.iconRefreshTimers ?? []).filter((t) => t !== id);
+        refreshRenderedIcons();
+      }, delay);
+      timers.push(id);
+    }
   }
 
   /** Rebuild any open Portal rail (used after settings that change rendering). */
