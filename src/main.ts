@@ -3,6 +3,7 @@ import type { WorkspaceLeaf } from 'obsidian';
 import { installCoreIcons } from './icons/core-icons';
 import { installMobileHeaderBack } from './nav/mobile-header-back';
 import { installNoteEnter } from './nav/note-enter';
+import { installPhoneChrome } from './phone-chrome/hub-level';
 // SPIKE — throwaway, removed with src/phone-chrome/spike.ts once Task 1 answers.
 import { installSpike } from './phone-chrome/spike';
 import { installTabDedupe } from './nav/tab-dedupe';
@@ -74,6 +75,9 @@ export default class PortalPlugin extends Plugin {
 
     // Phone-only: header top-left goes Back (falls back to opening the menu).
     installMobileHeaderBack(this);
+
+    // Phone-only: segmented hub navbar with a swipe pager (default off).
+    installPhoneChrome(this);
 
     // SPIKE — throwaway device probe, removed once Task 1 is answered.
     installSpike(this);
