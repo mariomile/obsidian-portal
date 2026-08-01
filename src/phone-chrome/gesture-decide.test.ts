@@ -20,6 +20,17 @@ test('decideClaim releases a dominantly vertical move for good', () => {
   assert.equal(decideClaim(20, 20), 'ignore');
 });
 
+test('decideClaim honors an explicit threshold instead of the default', () => {
+  // Under the default threshold (8) this travel is still pending; a smaller
+  // explicit threshold resolves it.
+  assert.equal(decideClaim(5, 0), 'pending');
+  assert.equal(decideClaim(5, 0, 3), 'claim');
+  // Under the default threshold this travel already resolves; a larger
+  // explicit threshold holds it pending — the default is not silently used.
+  assert.equal(decideClaim(10, 2), 'claim');
+  assert.equal(decideClaim(10, 2, 20), 'pending');
+});
+
 test('decideSnap commits past the halfway point', () => {
   assert.equal(decideSnap(0.6, 0, 1, 4), 'next');
   assert.equal(decideSnap(-0.6, 0, 1, 4), 'prev');
