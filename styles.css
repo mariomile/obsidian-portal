@@ -8,7 +8,8 @@
    Two motion aliases (mv-kit §6): colour/opacity washes ease with --mv-wash,
    physical transforms (the twisty's rotate) ease with --mv-lift — the two
    easings are not interchangeable per the kit's hover-richness rule. */
-.portal-rail {
+.portal-rail,
+.portal-phone-navbar {
   --portal-motion: var(--cosmos-t-fast, 120ms) var(--mv-lift, cubic-bezier(0.22, 1, 0.36, 1));
   --portal-wash-motion: var(--cosmos-t-fast, 120ms) var(--mv-wash, cubic-bezier(0.25, 1, 0.5, 1));
   --portal-wash: color-mix(in srgb, var(--text-normal) 6%, transparent);
@@ -537,4 +538,107 @@ body.is-phone .portal-section-header {
   .portal-note-enter {
     animation: none;
   }
+}
+
+/* --- phone chrome: hub navbar ----------------------------------------------
+   Constant-width segmented row. Fluidity contract: slots are fixed icon-sized
+   boxes that ONLY translate (nothing that contains an icon or text is ever
+   scaled), and the capsule background is a 3-slice — caps carry the radius
+   and translate, the flat 1px middle scales. Everything the gesture animates
+   is transform+opacity; `width` never moves. */
+.portal-phone-navbar {
+  --portal-phone-icon-size: 40px;
+  --portal-phone-gap: 8px;
+  position: relative;
+  display: block;
+  height: var(--portal-phone-icon-size);
+  margin: var(--size-4-2, 8px) var(--size-4-3, 12px);
+}
+
+.portal-phone-slot {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: var(--portal-phone-icon-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  will-change: transform;
+}
+
+.portal-phone-slot.is-active {
+  color: var(--text-normal);
+}
+
+.portal-phone-slot.is-disabled {
+  color: var(--text-faint);
+}
+
+/* 3-slice capsule wash. The wrapper only fades; its slices only transform. */
+.portal-phone-slot-bg {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 0;
+  overflow: visible;
+  opacity: 0;
+  will-change: opacity;
+}
+
+.portal-phone-pill-cap,
+.portal-phone-pill-mid {
+  position: absolute;
+  inset-block: 0;
+  background-color: var(--portal-wash);
+  will-change: transform;
+}
+
+.portal-phone-pill-cap {
+  width: calc(var(--portal-phone-icon-size) / 2);
+}
+
+.portal-phone-pill-cap.mod-left {
+  border-radius: var(--radius-l, 12px) 0 0 var(--radius-l, 12px);
+}
+
+.portal-phone-pill-cap.mod-right {
+  border-radius: 0 var(--radius-l, 12px) var(--radius-l, 12px) 0;
+}
+
+/* 1px base box: scaleX(n) makes it exactly n px wide with zero layout. */
+.portal-phone-pill-mid {
+  width: 1px;
+  transform-origin: left center;
+}
+
+.portal-phone-slot-icon {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+/* Anchored past the icon box; fades with the expansion share, never scales. */
+.portal-phone-slot-label {
+  position: absolute;
+  left: var(--portal-phone-icon-size);
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 200px;
+  font-size: var(--font-ui-small);
+  opacity: 0;
+  will-change: opacity;
+}
+
+/* Settled-state motion only — while dragging, .is-animating is off and the
+   finger drives every frame directly. */
+.portal-phone-navbar.is-animating .portal-phone-slot,
+.portal-phone-navbar.is-animating .portal-phone-pill-cap,
+.portal-phone-navbar.is-animating .portal-phone-pill-mid {
+  transition: transform var(--portal-motion);
+}
+
+.portal-phone-navbar.is-animating .portal-phone-slot-bg,
+.portal-phone-navbar.is-animating .portal-phone-slot-label {
+  transition: opacity var(--portal-wash-motion);
 }
