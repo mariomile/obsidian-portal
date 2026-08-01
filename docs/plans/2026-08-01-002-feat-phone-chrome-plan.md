@@ -89,15 +89,18 @@ if (Platform.isPhone) {
     },
   });
 
-  // Question B: does capture-phase touchstart suppression beat the drawer?
+  // Question B: does a document-capture listener beat Obsidian's drawer
+  // handler? In the capture phase the ANCESTOR wins regardless of who
+  // registered first — so this works if and only if Obsidian's own handler
+  // sits below `document`. If it is also on `document`, registration order
+  // decides and Obsidian (registered at boot) wins.
   this.registerDomEvent(
     document,
     'touchstart',
     (evt: TouchEvent) => {
       const t = evt.touches[0];
       if (!t) return;
-      if (t.clientX > 24 && t.clientX < window.innerWidth - 24) return;
-      console.log('SPIKE: swallowing edge touch at', t.clientX);
+      console.log('SPIKE: saw touch at', t.clientX, '— swallowing');
       evt.stopImmediatePropagation();
     },
     { capture: true },
@@ -127,7 +130,9 @@ Record from the console:
 
 Drag inward from the left screen edge, then from the right edge.
 
-**PASS** = the log line appears and no drawer opens. **FAIL** = the drawer opens anyway, meaning Obsidian's handler runs before a `document` capture listener.
+**PASS** = the log line appears and no drawer opens — Obsidian's handler lives below `document`, so one document-capture listener can both drive the pager and swallow the drawer, and the swipe works edge to edge.
+
+**FAIL** = the drawer opens anyway, meaning Obsidian also captures on `document` and its boot-time registration beats ours. Task 8 then falls back to the edge carve-out: the pager keeps its own listener on the hub container, a separate document-capture listener swallows only touches born in the outer 24px, and swipes started on the bezel do not page. Record which of the two it is — Task 8 branches on this answer.
 
 - [ ] **Step 5: Revert the scratch code**
 
@@ -152,14 +157,19 @@ If FAIL, Tasks 7 and 8 switch to the snapshot fallback: during the gesture
 translate a static clone of the neighbour and mount the real leaf on release.
 Fidelity degrades, the model does not.
 
-## Question B — does capture-phase touchstart suppression beat the drawer?
+## Question B — does a document-capture listener beat the drawer handler?
 
 **Result:** PASS | FAIL
-**Observed:** <the console output, verbatim>
+**Observed:** <the console output, verbatim; note whether a drawer opened>
 
-If FAIL, Task 8 cannot suppress the drawers. Escalate to Mario before
-continuing: it reopens the gesture-arbitration decision, which he settled by
-choosing to disable the drawers at hub level.
+PASS → Task 8 uses the **unified listener**: one document-capture touchstart
+that drives the pager and swallows the event, so the swipe works edge to edge
+with no dead zone.
+
+FAIL → Task 8 uses the **edge carve-out fallback**: the pager listens on the
+hub container, and a separate document-capture listener swallows only the
+outer 24px. Swipes started on the bezel do not page. Report this to Mario —
+it is a real degradation of the gesture, not just an implementation detail.
 ```
 
 - [ ] **Step 7: Commit**
@@ -721,10 +731,17 @@ Create `src/phone-chrome/gesture-decide.ts`:
  *   the finger has not travelled far enough to tell yet.
  * - `decideSnap` runs on `touchend` and says where the pager lands.
  *
- * At hub level the pager claims every horizontal drag it receives. The only
- * touches it never sees are the ones born in the outer 24px, which the
- * drawer-suppression listener in hub-level.ts swallows before they propagate
- * — so no edge logic belongs here.
+ * Listener placement is the caller's choice (`scope`), because it is what the
+ * spike's Question B settles:
+ *
+ * - `scope: document` + `capture` — the pager sees the touch before
+ *   Obsidian's drawer handler and swallows it. Full-width swipe, no dead
+ *   zone. This is the preferred wiring.
+ * - `scope: host` — the fallback when Obsidian also captures on `document`.
+ *   A separate listener in hub-level.ts then guards the bezel.
+ *
+ * Either way this class carries NO edge logic: it claims the horizontal
+ * drags it is handed, and where they come from is somebody else's problem.
  */
 
 export type ClaimDecision = 'pending' | 'claim' | 'ignore';
@@ -1326,7 +1343,9 @@ git commit -m "feat(phone-chrome): segmented navbar element and styles"
 
 **Interfaces:**
 - Consumes: `decideClaim` / `decideSnap` (Task 4).
-- Produces: `class PhoneChromePager` with `constructor(host: HTMLElement, callbacks: PagerCallbacks)`, `destroy(): void`; and `interface PagerCallbacks { slotCount(): number; activeIndex(): number; onClaim(direction: 1 | -1): HTMLElement | null; onProgress(progress: number): void; onSettle(decision: SnapDecision): void }`.
+- Produces: `class PhoneChromePager` with `constructor(host: HTMLElement, scope: HTMLElement | Document, callbacks: PagerCallbacks)`, `destroy(): void`; and `interface PagerCallbacks { slotCount(): number; activeIndex(): number; onClaim(direction: 1 | -1): HTMLElement | null; onProgress(progress: number): void; onSettle(decision: SnapDecision): void }`.
+
+`host` is the element the gesture is measured against (the hub container). `scope` is the node the listeners attach to, and it is what Question B decides: `document` in capture (PASS — the pager owns the touch before the drawer sees it) or `host` itself (FAIL — the edge carve-out fallback). Splitting the two is what lets one implementation serve both spike outcomes.
 
 The pager owns touch only. It knows nothing about leaves or the navbar — it reports progress and a settle decision, and the caller decides what those mean.
 
@@ -1384,6 +1403,16 @@ export class PhoneChromePager {
   private readonly onTouchStart = (evt: TouchEvent): void => {
     const touch = evt.touches[0];
     if (!touch) return;
+    // When scoped to `document` we see the whole app: ignore anything born
+    // outside the hub, and swallow the rest so the drawer never gets it.
+    if (this.scope !== this.host) {
+      const target = evt.target as HTMLElement | null;
+      if (!target || !this.host.contains(target)) {
+        this.state = 'idle';
+        return;
+      }
+      evt.stopImmediatePropagation();
+    }
     this.startX = touch.clientX;
     this.startY = touch.clientY;
     this.lastX = touch.clientX;
@@ -1458,22 +1487,34 @@ export class PhoneChromePager {
     this.callbacks.onSettle(decision);
   };
 
+  private readonly opts: AddEventListenerOptions;
+
   constructor(
     private readonly host: HTMLElement,
+    private readonly scope: HTMLElement | Document,
     private readonly callbacks: PagerCallbacks,
   ) {
-    // Not passive: a claimed drag must be able to preventDefault().
-    this.host.addEventListener('touchstart', this.onTouchStart, { passive: true });
-    this.host.addEventListener('touchmove', this.onTouchMove, { passive: false });
-    this.host.addEventListener('touchend', this.onTouchEnd, { passive: true });
-    this.host.addEventListener('touchcancel', this.onTouchEnd, { passive: true });
+    // Capture only when scoped to the document — that is the whole point of
+    // that wiring: run before Obsidian's drawer handler, which sits lower.
+    this.opts = { capture: scope !== host };
+    // touchmove is never passive: a claimed drag must preventDefault().
+    this.scope.addEventListener('touchstart', this.onTouchStart, {
+      ...this.opts,
+      passive: false,
+    });
+    this.scope.addEventListener('touchmove', this.onTouchMove, {
+      ...this.opts,
+      passive: false,
+    });
+    this.scope.addEventListener('touchend', this.onTouchEnd, this.opts);
+    this.scope.addEventListener('touchcancel', this.onTouchEnd, this.opts);
   }
 
   destroy(): void {
-    this.host.removeEventListener('touchstart', this.onTouchStart);
-    this.host.removeEventListener('touchmove', this.onTouchMove);
-    this.host.removeEventListener('touchend', this.onTouchEnd);
-    this.host.removeEventListener('touchcancel', this.onTouchEnd);
+    this.scope.removeEventListener('touchstart', this.onTouchStart, this.opts);
+    this.scope.removeEventListener('touchmove', this.onTouchMove, this.opts);
+    this.scope.removeEventListener('touchend', this.onTouchEnd, this.opts);
+    this.scope.removeEventListener('touchcancel', this.onTouchEnd, this.opts);
   }
 }
 ```
@@ -1640,7 +1681,11 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
     };
     navbar.render(activeIndex);
 
-    pager = new PhoneChromePager(container, {
+    // Question B PASS → `document`: the pager runs before Obsidian's drawer
+    // handler and swallows the touch itself, so the swipe works edge to edge.
+    // Question B FAIL → swap this for `container` and keep the carve-out
+    // listener at the bottom of this file.
+    pager = new PhoneChromePager(container, document, {
       slotCount: () => resolved.length,
       activeIndex: () => activeIndex,
       onClaim: (direction) => {
@@ -1740,38 +1785,28 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
     }
   };
 
-  /** px from each screen edge that Obsidian's drawer drag responds to. */
-  const DRAWER_EDGE_PX = 24;
-
-  // Suppress Obsidian's edge-drag drawers while the chrome owns the hub.
-  // Same technique as `mobile-header-back.ts`: a document-level capture
-  // listener runs before anything else sees the event. Gated on the setting
-  // and on the chrome actually being mounted, so it is inert everywhere else.
+  // NOTE — only needed if the spike recorded Question B as FAIL. With the
+  // unified wiring above, the pager already swallows every hub touch at
+  // document capture and this listener must NOT exist: two listeners racing
+  // for the same touch is the bug that would ship the feature dead.
   //
-  // CRITICAL: only edge-zone touches are swallowed. stopImmediatePropagation
-  // at document capture halts propagation toward the target entirely, so an
-  // unconditional swallow here would ALSO starve the pager's own touchstart
-  // listener on the container and kill the swipe. The drawer only ever
-  // reacts to edge drags, so killing the edge zone alone silences it while
-  // every other touch flows through to the pager untouched. Consequence: a
-  // swipe started in the outer 24px does not page — which matches how native
-  // apps treat the bezel.
-  plugin.registerDomEvent(
-    document,
-    'touchstart',
-    (evt: TouchEvent) => {
-      if (!plugin.settings.phoneChrome || !container) return;
-      const touch = evt.touches[0];
-      const target = evt.target as HTMLElement | null;
-      if (!touch || !target?.closest(`.${HUB_CLASS}`)) return;
-      const nearEdge =
-        touch.clientX <= DRAWER_EDGE_PX ||
-        touch.clientX >= window.innerWidth - DRAWER_EDGE_PX;
-      if (!nearEdge) return;
-      evt.stopImmediatePropagation();
-    },
-    { capture: true },
-  );
+  // Fallback shape, for reference. `stopImmediatePropagation` at document
+  // capture halts propagation toward the target, so it may only ever fire
+  // for touches the pager is not going to want — hence the bezel-only test.
+  // Consequence: a swipe started in the outer 24px does not page.
+  //
+  //   const DRAWER_EDGE_PX = 24;
+  //   plugin.registerDomEvent(document, 'touchstart', (evt: TouchEvent) => {
+  //     if (!plugin.settings.phoneChrome || !container) return;
+  //     const touch = evt.touches[0];
+  //     const target = evt.target as HTMLElement | null;
+  //     if (!touch || !target?.closest(`.${HUB_CLASS}`)) return;
+  //     const nearEdge =
+  //       touch.clientX <= DRAWER_EDGE_PX ||
+  //       touch.clientX >= window.innerWidth - DRAWER_EDGE_PX;
+  //     if (!nearEdge) return;
+  //     evt.stopImmediatePropagation();
+  //   }, { capture: true });
 
   plugin.registerEvent(plugin.app.workspace.on('layout-change', sync));
   plugin.registerEvent(plugin.app.workspace.on('active-leaf-change', sync));
@@ -1885,7 +1920,7 @@ Record a real PASS/FAIL for each, with what you actually saw:
 4. A short slow drag returns; a short fast flick commits.
 5. On the first slot, dragging right rubber-bands and settles back.
 6. Vertical scrolling inside a hub view still works, including a diagonal thumb.
-7. Dragging inward from either screen edge does **not** open a drawer.
+7. Dragging inward from either screen edge does **not** open a drawer. With the unified wiring (Question B PASS) that same edge drag also *pages* — verify both halves: no drawer, and the swipe works.
 8. The menu button still opens the left sidebar by tap.
 9. Opening a note unmounts the chrome; the back affordance returns to it.
 10. Inside the editor, horizontal drags do nothing unusual and text selection is unaffected.
@@ -1921,5 +1956,7 @@ Report the checklist verbatim, then ask whether `phoneChrome` should stay defaul
 **Deploy through the build.** `pnpm build` writes `main.js` into the vault via `.obsidian-plugin-dir`. Never copy the repo-root `main.js` by hand — it goes stale silently.
 
 **Never `git add -A`.** Stage the exact paths listed in each commit step.
+
+**One listener owns the touch.** The pager and the drawer suppression must never be two separate listeners competing for the same touchstart — `stopImmediatePropagation` at document capture stops the event reaching anything below, so a suppressor sitting above the pager starves it and the swipe silently never fires. Either the pager itself owns document capture and swallows what it takes (preferred), or it stays on the container and the suppressor is restricted to the bezel, where the pager was never going to look. There is no third arrangement.
 
 **Fluidity contract (cross-cutting, non-negotiable).** Gesture frames — `setProgress` and `onProgress` — may write transforms and opacity and nothing else: no layout reads (`clientWidth`, `getComputedStyle`), no workspace queries, no DOM traversal. Everything a frame needs is measured once and cached: by `render()` for the bar, at claim time for the leaves. `will-change` on the full-screen leaves is gesture-scoped (`portal-phone-dragging`) because permanent layers for two viewport-sized elements is real GPU memory on an iPhone. The capsule morphs as a 3-slice so no rounded corner is ever scaled and no icon ever stretches. Velocity is instantaneous (last two samples), not a whole-gesture average — that difference is exactly what makes a flick feel like a flick. The drawer suppression swallows ONLY edge-zone touches; an unconditional swallow at document capture would starve the pager's own listeners and kill the feature.
