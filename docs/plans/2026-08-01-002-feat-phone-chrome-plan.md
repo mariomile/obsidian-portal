@@ -1006,13 +1006,25 @@ interface AppWithCommandRegistry {
  *  returns false so a slot degrades to disabled rather than throwing. */
 export function isViewTypeRegistered(app: App, type: string): boolean {
   const registry = (app as unknown as AppWithViewRegistry).viewRegistry?.viewByType;
-  return typeof registry === 'object' && registry !== null && type in registry;
+  // Own-property check, NOT `in`: `in` walks the prototype chain, so
+  // `'constructor' in {}` is true and a slot typo'd to an Object.prototype key
+  // would resolve as a real, pageable view. `Object.prototype.hasOwnProperty`
+  // rather than `Object.hasOwn` — this project's tsconfig lib is ES2021.
+  return (
+    typeof registry === 'object' &&
+    registry !== null &&
+    Object.prototype.hasOwnProperty.call(registry, type)
+  );
 }
 
 /** True when a command id exists. Same defensive posture as above. */
 export function isCommandRegistered(app: App, id: string): boolean {
   const registry = (app as unknown as AppWithCommandRegistry).commands?.commands;
-  return typeof registry === 'object' && registry !== null && id in registry;
+  return (
+    typeof registry === 'object' &&
+    registry !== null &&
+    Object.prototype.hasOwnProperty.call(registry, id)
+  );
 }
 ```
 
