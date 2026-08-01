@@ -21,6 +21,35 @@ export interface PagerCallbacks {
 const RUBBER_BAND_FACTOR = 0.35;
 
 /**
+ * A touchend/touchcancel arriving more than this long after the last
+ * touchmove means the finger stopped moving before it lifted — any
+ * velocity computed from the last sample is stale, not a flick.
+ */
+const STALE_MOVE_MS = 60;
+
+type TouchEventName = 'touchstart' | 'touchmove' | 'touchend' | 'touchcancel';
+
+interface TouchBinding {
+  readonly type: TouchEventName;
+  readonly handler: EventListener;
+  readonly options: AddEventListenerOptions;
+}
+
+/**
+ * Single point where a `TouchEvent`-typed handler is asserted to the DOM's
+ * looser `EventListener` type. Needed because `scope` is a union
+ * (`HTMLElement | Document`), so TS can't resolve either type's
+ * element-specific generic `addEventListener` overload for it and falls
+ * back to the base `EventTarget` signature, which expects `(evt: Event) =>
+ * void`. Bindings built through `TouchBinding`/`TouchEventName` are only
+ * ever wired to touch event names, so the assertion is safe — and it is
+ * the only place in this file it happens.
+ */
+function asTouchListener(handler: (evt: TouchEvent) => void): EventListener {
+  return handler as EventListener;
+}
+
+/**
  * Touch-driven horizontal pager over the hub.
  *
  * Owns exactly one thing: turning a finger into `progress`. Everything
@@ -45,6 +74,15 @@ export class PhoneChromePager {
   private readonly onTouchStart = (evt: TouchEvent): void => {
     const touch = evt.touches[0];
     if (!touch) return;
+    if (this.state === 'dragging') {
+      // A second touch arrived mid-drag (second finger, or a re-entrant
+      // touch). The claim already handed to the caller via onClaim must
+      // still settle — every onClaim gets exactly one onSettle — before the
+      // pager resets state for this new touch. Without this the caller is
+      // left holding a translated neighbour with no snap instruction.
+      this.callbacks.onSettle('back');
+      this.neighbour = null;
+    }
     // When scoped to `document` we see the whole app: ignore anything born
     // outside the hub, and swallow the rest so the drawer never gets it.
     if (this.scope !== this.host) {
@@ -104,9 +142,6 @@ export class PhoneChromePager {
     this.callbacks.onProgress(progress);
   };
 
-  // Signature must match the TouchEvent listener type shared with
-  // touchcancel; onTouchEnd reads state from instance fields, not the event.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private readonly onTouchEnd = (evt: TouchEvent): void => {
     if (this.state !== 'dragging') {
       this.state = 'idle';
@@ -119,13 +154,26 @@ export class PhoneChromePager {
     // INSTANTANEOUS velocity from the last two samples, in progress-per-ms —
     // decideSnap's unit. An average over the whole gesture would dilute a
     // flick thrown at the end of a slow drag, which is precisely the case
-    // flick detection exists for.
-    const dt = Math.max(1, this.lastTime - this.prevTime);
-    const velocity = -(this.lastX - this.prevX) / this.width / dt;
+    // flick detection exists for. Two guards keep it honest: a touchend long
+    // after the last touchmove (finger held still, then lifted) describes
+    // motion that already stopped, not a flick; and a non-positive sample
+    // interval (coalesced touchmoves sharing a timestamp) must read as zero
+    // rather than being divided into a spurious spike.
+    const dt = this.lastTime - this.prevTime;
+    const sinceLastMove = evt.timeStamp - this.lastTime;
+    const velocity =
+      dt <= 0 || sinceLastMove > STALE_MOVE_MS
+        ? 0
+        : -(this.lastX - this.prevX) / this.width / dt;
 
-    const decision = this.neighbour
-      ? decideSnap(progress, velocity, this.callbacks.activeIndex(), this.callbacks.slotCount())
-      : 'back';
+    // A cancelled gesture (incoming call, palm rejection, system edge
+    // takeover) never commits a page turn, regardless of progress/velocity.
+    const cancelled = evt.type === 'touchcancel';
+    const decision = cancelled
+      ? 'back'
+      : this.neighbour
+        ? decideSnap(progress, velocity, this.callbacks.activeIndex(), this.callbacks.slotCount())
+        : 'back';
 
     this.state = 'idle';
     this.neighbour = null;
@@ -133,6 +181,7 @@ export class PhoneChromePager {
   };
 
   private readonly opts: AddEventListenerOptions;
+  private readonly bindings: readonly TouchBinding[];
 
   constructor(
     private readonly host: HTMLElement,
@@ -142,33 +191,38 @@ export class PhoneChromePager {
     // Capture only when scoped to the document — that is the whole point of
     // that wiring: run before Obsidian's drawer handler, which sits lower.
     this.opts = { capture: scope !== host };
-    // `scope` is `HTMLElement | Document`, so TS resolves `addEventListener`
-    // through the base `EventTarget` overload (listener: (evt: Event) =>
-    // void) rather than either type's element-specific generic overload —
-    // hence the `EventListener` casts below. The handlers themselves stay
-    // typed to `TouchEvent`, since these listeners are only ever wired to
-    // touch event names.
-    // touchmove is never passive: a claimed drag must preventDefault().
-    this.scope.addEventListener('touchstart', this.onTouchStart as EventListener, {
-      ...this.opts,
-      passive: false,
-    });
-    this.scope.addEventListener('touchmove', this.onTouchMove as EventListener, {
-      ...this.opts,
-      passive: false,
-    });
-    this.scope.addEventListener('touchend', this.onTouchEnd as EventListener, this.opts);
-    this.scope.addEventListener('touchcancel', this.onTouchEnd as EventListener, this.opts);
+    // touchmove is never passive: a claimed drag must preventDefault(). This
+    // table is the single source of truth for what is wired up — both the
+    // constructor and destroy() iterate it, so add/remove cannot diverge.
+    this.bindings = [
+      {
+        type: 'touchstart',
+        handler: asTouchListener(this.onTouchStart),
+        options: { ...this.opts, passive: false },
+      },
+      {
+        type: 'touchmove',
+        handler: asTouchListener(this.onTouchMove),
+        options: { ...this.opts, passive: false },
+      },
+      { type: 'touchend', handler: asTouchListener(this.onTouchEnd), options: this.opts },
+      { type: 'touchcancel', handler: asTouchListener(this.onTouchEnd), options: this.opts },
+    ];
+    for (const { type, handler, options } of this.bindings) {
+      this.scope.addEventListener(type, handler, options);
+    }
   }
 
   destroy(): void {
-    this.scope.removeEventListener('touchstart', this.onTouchStart as EventListener, this.opts);
-    this.scope.removeEventListener('touchmove', this.onTouchMove as EventListener, this.opts);
-    this.scope.removeEventListener('touchend', this.onTouchEnd as EventListener, this.opts);
-    this.scope.removeEventListener(
-      'touchcancel',
-      this.onTouchEnd as EventListener,
-      this.opts,
-    );
+    if (this.state === 'dragging') {
+      // Tearing down mid-drag must still settle the claim handed to the
+      // caller via onClaim — same rule as the re-entrant touchstart guard.
+      this.callbacks.onSettle('back');
+      this.state = 'idle';
+      this.neighbour = null;
+    }
+    for (const { type, handler, options } of this.bindings) {
+      this.scope.removeEventListener(type, handler, options);
+    }
   }
 }
