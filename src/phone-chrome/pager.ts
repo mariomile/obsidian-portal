@@ -84,14 +84,19 @@ export class PhoneChromePager {
       this.neighbour = null;
     }
     // When scoped to `document` we see the whole app: ignore anything born
-    // outside the hub, and swallow the rest so the drawer never gets it.
+    // outside the hub. The touch itself is NOT swallowed here — direction is
+    // unknown at touchstart, and stopping propagation before we know this is
+    // even a horizontal drag would kill every OTHER touchstart consumer
+    // inside hub views (long-press menus, drag-reorder, swipe actions in
+    // Masonry/Tasks/etc.) for as long as the chrome is mounted. The swallow
+    // happens in onTouchMove instead, once decideClaim actually commits to a
+    // horizontal drag — see the comment there.
     if (this.scope !== this.host) {
       const target = evt.target as HTMLElement | null;
       if (!target || !this.host.contains(target)) {
         this.state = 'idle';
         return;
       }
-      evt.stopImmediatePropagation();
     }
     this.startX = touch.clientX;
     this.startY = touch.clientY;
@@ -127,8 +132,21 @@ export class PhoneChromePager {
       this.width = this.host.clientWidth || 1;
     }
 
-    // Claimed: the browser must not also scroll or trigger a native gesture.
+    // Claimed: the browser must not also scroll or trigger a native gesture,
+    // and — when scoped to `document` — no OTHER document-capture listener
+    // (Obsidian's edge-drag drawer handler) may see this move or any later
+    // move of the SAME gesture either. Swallowed here rather than at
+    // touchstart (see the comment there) precisely because direction is
+    // finally known: breaking every long-press/drag-reorder/swipe-action in
+    // hub views is certain, universal harm, while the drawer possibly
+    // winning a race at this later claim point is a narrower, unmeasured
+    // one — not worth breaking the common case to prevent a hypothetical.
+    // UNVERIFIED ON HARDWARE: whether claiming this late still reliably
+    // beats Obsidian's own drawer handler is a device sign-off item; if it
+    // does not, the commented-out edge carve-out listener in hub-level.ts is
+    // the documented fallback.
     evt.preventDefault();
+    if (this.scope !== this.host) evt.stopImmediatePropagation();
 
     const raw = -dx / this.width; // left drag → positive progress → next slot
     const progress = this.neighbour

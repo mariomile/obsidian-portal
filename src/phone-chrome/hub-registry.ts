@@ -9,11 +9,15 @@ import type { PhoneChromeSlot } from './slots';
  * silently missing one would not.
  *
  * Takes predicates rather than an `App` so the rule is unit-testable; the
- * real predicates come from `obsidian-internals.ts`.
+ * real predicates come from `obsidian-internals.ts` (and, for
+ * `hasReachableLeaf`, a small workspace+DOM helper in hub-level.ts).
  */
 export interface ResolvedSlot {
   slot: PhoneChromeSlot;
-  /** The slot's target exists, so tapping it does something. */
+  /** The slot's target exists AND, for a view slot, an open leaf for it is
+   *  actually reachable inside the hub container — so tapping or paging to
+   *  it does something real rather than silently nothing. A command slot
+   *  needs no leaf; running it is enough on its own. */
   enabled: boolean;
   /**
    * The pager can slide into this slot. True only for view-backed slots:
@@ -28,10 +32,19 @@ export function resolveSlots(
   slots: readonly PhoneChromeSlot[],
   hasViewType: (type: string) => boolean,
   hasCommand: (id: string) => boolean,
+  /** Does an open leaf for this view type actually live where the pager can
+   *  reach and clean it up (a child of the hub container)? A view slot with
+   *  no reachable leaf must report disabled, not just non-pageable — with no
+   *  leaf to hand over, tapping it does exactly nothing either, and it would
+   *  otherwise advertise a swipe destination that goes nowhere. Defaults to
+   *  always-true so callers/tests that only care about view-type/command
+   *  registration are unaffected; the real, workspace-aware predicate is
+   *  supplied by hub-level.ts. */
+  hasReachableLeaf: (type: string) => boolean = () => true,
 ): ResolvedSlot[] {
   return slots.map((slot) => {
     const enabled = slot.viewType
-      ? hasViewType(slot.viewType)
+      ? hasViewType(slot.viewType) && hasReachableLeaf(slot.viewType)
       : slot.commandId
         ? hasCommand(slot.commandId)
         : false;

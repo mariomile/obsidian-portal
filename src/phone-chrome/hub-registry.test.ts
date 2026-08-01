@@ -64,6 +64,42 @@ test('firstEnabledIndex returns -1 when nothing resolves', () => {
   assert.equal(firstEnabledIndex(resolveSlots(slots, none, none)), -1);
 });
 
+test('a view slot with no reachable leaf is disabled and not pageable', () => {
+  const resolved = resolveSlots(slots, has('portal', 'masonry'), has('daily-notes'), () => false);
+  assert.deepEqual(
+    resolved.map((r) => r.enabled),
+    // portal/masonry are view slots with no reachable leaf → disabled;
+    // daily is a command slot, unaffected by leaf reachability.
+    [false, false, true],
+  );
+  assert.deepEqual(
+    resolved.map((r) => r.pageable),
+    [false, false, false],
+  );
+});
+
+test('hasReachableLeaf can disable a single slot without affecting the rest', () => {
+  const onlyMasonryReachable = (type: string) => type === 'masonry';
+  const resolved = resolveSlots(
+    slots,
+    has('portal', 'masonry'),
+    has('daily-notes'),
+    onlyMasonryReachable,
+  );
+  assert.deepEqual(
+    resolved.map((r) => r.enabled),
+    [false, true, true],
+  );
+});
+
+test('hasReachableLeaf defaults to always-true when omitted', () => {
+  const resolved = resolveSlots(slots, has('portal', 'masonry'), has('daily-notes'));
+  assert.deepEqual(
+    resolved.map((r) => r.enabled),
+    [true, true, true],
+  );
+});
+
 test('nextPageableIndex skips disabled and tap-only slots', () => {
   const all = resolveSlots(slots, has('portal', 'masonry'), has('daily-notes'));
   assert.equal(nextPageableIndex(all, 0, 1), 1);

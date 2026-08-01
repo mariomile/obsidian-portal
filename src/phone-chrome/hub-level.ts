@@ -31,35 +31,49 @@ const SETTLE_EPILOGUE_MS = 350;
  * Mounted only when the active leaf is one of the slots ("hub level") and
  * torn down the moment a note takes over, which is what keeps the gesture
  * from ever competing with CodeMirror. While mounted, Obsidian's edge-drag
- * drawers are suppressed: at hub level the left drawer is Portal (already a
- * slot) and the right one is empty with no note open, so both are redundant
- * exactly where they are disabled.
+ * drawers are suppressed once a horizontal drag actually claims (see
+ * `pager.ts`): at hub level the left drawer is Portal (already a slot) and
+ * the right one is empty with no note open, so both are redundant exactly
+ * where they are disabled.
  *
  * Gated on `Platform.isPhone` at install and on `settings.phoneChrome` inside
- * every handler, so the toggle applies live with no reload.
+ * every handler. Returns a `sync` hook the caller should invoke whenever
+ * something outside the normal workspace events changes what the chrome
+ * should look like right now — the settings tab's toggle uses this so
+ * turning `phoneChrome` off applies live instead of waiting for the next
+ * `layout-change`/`active-leaf-change`.
  */
-export function installPhoneChrome(plugin: PortalPlugin): void {
-  if (!Platform.isPhone) return;
+export function installPhoneChrome(plugin: PortalPlugin): () => void {
+  if (!Platform.isPhone) return () => {};
 
   let navbar: PhoneChromeNavbar | null = null;
   let pager: PhoneChromePager | null = null;
   let container: HTMLElement | null = null;
   let resolved: ResolvedSlot[] = [];
   let activeIndex = 0;
-  /** Per-gesture cache, filled at claim and reused by every frame. Gesture
-   *  frames must never query the workspace or force layout — that is the
-   *  fluidity contract, and this object is how the hub honours it. */
+  /** Per-gesture cache for a PAIRED drag (current leaf + a real neighbour),
+   *  filled at claim and reused by every frame. Gesture frames must never
+   *  query the workspace or force layout — that is the fluidity contract,
+   *  and this object is how the hub honours it. */
   let gesture: {
     targetIndex: number;
     currentEl: HTMLElement;
     neighbourEl: HTMLElement;
     width: number;
   } | null = null;
-  /** True from the moment a drag is claimed until the settle epilogue (or
-   *  its cancellation) finishes — covers both the live drag and the
-   *  post-release glide. `sync()` must not touch the navbar/container while
-   *  this is true: a `layout-change` fired by `loadIfDeferred()` mid-drag
-   *  would otherwise re-render the bar to progress 0 under the finger. */
+  /** Per-gesture cache for a RUBBER-BAND drag — claimed but with no usable
+   *  destination (edge of the bar, or a would-be target whose leaf isn't
+   *  reachable inside the hub container). Mutually exclusive with `gesture`;
+   *  translates the current leaf alone, heavily damped, instead of leaving
+   *  the swipe with zero feedback. */
+  let rubberBand: { el: HTMLElement; width: number } | null = null;
+  /** True from the moment ANY drag claims (paired or rubber-band) until its
+   *  settle epilogue (or its cancellation) finishes — covers the live drag
+   *  and the post-release glide. `sync()`, the resize backstop, and
+   *  `navbar.onSelect` must not touch the navbar/container/state mid-
+   *  gesture: a `layout-change` fired by `loadIfDeferred()` mid-drag, a
+   *  rotation, or a pill tap during the glide would otherwise re-render the
+   *  bar or mutate `activeIndex` out from under the finger/animation. */
   let gestureInFlight = false;
   /** Set for the duration of `unmount()` so a synchronous `onSettle('back')`
    *  triggered by `pager.destroy()` bails immediately instead of re-dirtying
@@ -69,30 +83,38 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
    *  mid-flight can cancel it instead of letting it fire against a torn-down
    *  navbar. */
   let mountRenderTimer: number | null = null;
-  /** Cancels a pending settle epilogue (its timeout + transitionend
+  /** Cancels the current settle epilogue (its timeout + transitionend
    *  listener) without running its completion logic — used only by
    *  `unmount()`, which cleans up the DOM itself via `clearTransforms()`. */
   let cancelPendingEpilogue: (() => void) | null = null;
-  /** Identifies which settle epilogue currently owns `cancelPendingEpilogue`
-   *  and `gestureInFlight`. Two epilogues can be alive at once — a second
-   *  swipe (or the pager's own re-entrant-touchstart `onSettle('back')`)
-   *  can claim and settle while an earlier one is still gliding — and both
-   *  epilogues close over the SAME two outer variables. Without an
-   *  ownership check, the earlier one finishing later would null out the
-   *  later one's still-pending canceller (orphaning it — `unmount()` could
-   *  no longer cancel it) and clear `gestureInFlight` while the later one
-   *  is still animating. Only the epilogue that still matches this token
-   *  when it finishes is allowed to touch the two shared slots (or run
-   *  `clearTransforms()` / commit `activeIndex` / re-render); an epilogue
-   *  that has been superseded does only its own local listener/timer
-   *  cleanup and leaves the shared teardown to whichever epilogue is
-   *  current when it finishes. */
+  /** Identifies which settle epilogue (paired-leaf OR rubber-band — both go
+   *  through `runOwnedEpilogue`) currently owns `cancelPendingEpilogue` and
+   *  `gestureInFlight`. Two epilogues can be alive at once — a second swipe
+   *  (or the pager's own re-entrant-touchstart `onSettle('back')`) can claim
+   *  and settle while an earlier one is still gliding — and both epilogues
+   *  close over the SAME two outer variables. Without an ownership check,
+   *  the earlier one finishing later would null out the later one's still-
+   *  pending canceller (orphaning it — `unmount()` could no longer cancel
+   *  it) and clear `gestureInFlight` while the later one is still animating.
+   *  Only the epilogue that still matches this token when it finishes is
+   *  allowed to touch the two shared slots or run its completion callback;
+   *  a superseded epilogue does only its own local listener/timer cleanup
+   *  and leaves the shared teardown to whichever epilogue is current when
+   *  it finishes. */
   let epilogueOwner: symbol | null = null;
   /** The slot configuration the currently-mounted bar was built from
    *  (JSON of `settings.phoneChromeSlots`). `PhoneChromeNavbar` takes its
    *  resolved slots at construction and has no update method, so the only
    *  way a settings change reaches an already-mounted bar is a fresh mount;
-   *  this is what `sync()` diffs against to detect that. */
+   *  this is what `sync()` diffs against to detect that.
+   *
+   *  Known gap: this catches SETTINGS changes, not a slot's reachability
+   *  changing purely from workspace state (e.g. the user opens a Masonry
+   *  leaf elsewhere while the bar is already mounted with it disabled).
+   *  `resolved` itself refreshes every `sync()` call either way, so paging
+   *  and tapping behave correctly on the next gesture; only the navbar's
+   *  own greyed-out rendering can lag until some other trigger remounts it.
+   *  Not solved here — out of scope for "correct the reporting" (C5). */
   let mountedSlotsSignature = '';
 
   const slotsSignature = (): string => JSON.stringify(plugin.settings.phoneChromeSlots);
@@ -103,8 +125,34 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
       return plugin.app.workspace.getLeavesOfType(slot.viewType)[0] ?? null;
     });
 
-  const leafEl = (leaf: WorkspaceLeaf | null | undefined): HTMLElement | null =>
-    (leaf?.view.containerEl.closest('.workspace-leaf') as HTMLElement | null) ?? null;
+  const leafEl = (leaf: WorkspaceLeaf | null | undefined): HTMLElement | null => {
+    const el = (leaf?.view.containerEl.closest('.workspace-leaf') as HTMLElement | null) ?? null;
+    // A leaf outside the tab container (e.g. Portal's own view, opened via
+    // getLeftLeaf in the LEFT SIDEBAR — the shipped default slot 0) is
+    // invisible to clearTransforms(), which only sweeps container.children,
+    // and outside every `.portal-phone-hub > .workspace-leaf` CSS rule.
+    // Translating it would stick an inline transform and peek/dragging
+    // classes on it PERMANENTLY, surviving unmount and onunload. A leaf we
+    // cannot clean up is a leaf we must never touch.
+    if (!el || el.parentElement !== container) return null;
+    return el;
+  };
+
+  /** Is there an open leaf for `viewType`, actually reachable inside the hub
+   *  container (a child of it)? Feeds `resolveSlots`' `hasReachableLeaf`
+   *  predicate: a view slot with no open leaf, or one that lives outside the
+   *  hub, must report disabled rather than advertising a tap/swipe
+   *  destination that goes nowhere. Falls back to a live DOM query when
+   *  `container` isn't set yet (called from `sync()` before the first
+   *  mount, to decide whether hub level should even engage) — the container
+   *  `mount()` would attach to if it decided to. */
+  const hasReachableLeaf = (viewType: string): boolean => {
+    const target = container ?? document.querySelector<HTMLElement>(TAB_CONTAINER);
+    if (!target) return false;
+    const leaf = plugin.app.workspace.getLeavesOfType(viewType)[0];
+    const el = (leaf?.view.containerEl.closest('.workspace-leaf') as HTMLElement | null) ?? null;
+    return el?.parentElement === target;
+  };
 
   const indexOfActiveLeaf = (): number => {
     const active = plugin.app.workspace.getMostRecentLeaf();
@@ -121,6 +169,60 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
     }
   };
 
+  /** Runs `onDone` exactly once, either when `el`'s own `transform`
+   *  transition ends or after `SETTLE_EPILOGUE_MS`, whichever comes first —
+   *  the shared guarantee both the paired-leaf settle and the rubber-band
+   *  settle need. Claims `epilogueOwner`; `onDone` only ever runs when this
+   *  call is still the current owner when it finishes (see `epilogueOwner`'s
+   *  doc) — a superseded call does its own local listener/timer cleanup and
+   *  nothing else. Installs the cancel function as `cancelPendingEpilogue`
+   *  (used only by `unmount()`, to cancel without running `onDone`). */
+  const runOwnedEpilogue = (el: HTMLElement, onDone: () => void): void => {
+    const owner = Symbol('phone-chrome-settle-epilogue');
+    epilogueOwner = owner;
+    let done = false;
+    let timer = 0;
+    let listener: ((evt: Event) => void) | null = null;
+
+    const finish = (): void => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(timer);
+      if (listener) el.removeEventListener('transitionend', listener);
+      listener = null;
+      if (epilogueOwner !== owner) {
+        // Superseded by a later swipe (or the pager's re-entrant-touchstart
+        // onSettle('back')). Touching the shared slots or clearTransforms()
+        // here would orphan the newer epilogue's canceller and strip its
+        // still-live classes/transforms mid-flight. Leave everything to
+        // whichever epilogue is current when IT finishes.
+        return;
+      }
+      cancelPendingEpilogue = null;
+      epilogueOwner = null;
+      onDone();
+    };
+
+    listener = (evt: Event): void => {
+      // Any descendant's opacity/transform transition ending bubbles up
+      // through `el` (a whole `.workspace-leaf` subtree) — only `el`'s OWN
+      // transform transition ending means the slide actually finished.
+      const te = evt as TransitionEvent;
+      if (te.target !== el || te.propertyName !== 'transform') return;
+      finish();
+    };
+    el.addEventListener('transitionend', listener);
+    timer = window.setTimeout(finish, SETTLE_EPILOGUE_MS);
+
+    cancelPendingEpilogue = (): void => {
+      window.clearTimeout(timer);
+      if (listener) el.removeEventListener('transitionend', listener);
+      listener = null;
+      if (epilogueOwner === owner) epilogueOwner = null;
+      cancelPendingEpilogue = null;
+    };
+  };
+
   const unmount = (): void => {
     // Set before touching the pager: `destroy()` honours its one-onSettle-
     // per-onClaim guarantee by calling `onSettle('back')` synchronously when
@@ -129,6 +231,7 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
     unmounted = true;
     gestureInFlight = false;
     gesture = null;
+    rubberBand = null;
     if (mountRenderTimer !== null) {
       window.clearTimeout(mountRenderTimer);
       mountRenderTimer = null;
@@ -136,15 +239,23 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
     // Cancel (not run) any settle epilogue in flight from a completed drag —
     // its timeout and transitionend listener would otherwise fire after
     // `container` is null and skip `clearTransforms()` entirely, leaving an
-    // inline `translateX` stuck on an Obsidian leaf. try/finally: neither
-    // call throws today, but a throw here must not leave `unmounted` stuck
-    // `true` forever — that would silently no-op every future `onSettle`.
+    // inline `translateX` stuck on an Obsidian leaf. Two NESTED try/finally,
+    // not one shared try: neither call throws today, but if
+    // `cancelPendingEpilogue` ever did, a single shared try would skip
+    // `pager?.destroy()` entirely while `finally` still nulled `pager` —
+    // leaking the pager's four document-capture touch listeners for the
+    // rest of the session. Nesting means `pager?.destroy()` is always
+    // attempted, and `pager`/`unmounted` always reset, regardless of which
+    // step throws.
     try {
       cancelPendingEpilogue?.();
-      pager?.destroy();
     } finally {
-      pager = null;
-      unmounted = false;
+      try {
+        pager?.destroy();
+      } finally {
+        pager = null;
+        unmounted = false;
+      }
     }
     clearTransforms();
     navbar?.destroy();
@@ -166,6 +277,7 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
       plugin.settings.phoneChromeSlots,
       (type) => isViewTypeRegistered(plugin.app, type),
       (id) => isCommandRegistered(plugin.app, id),
+      hasReachableLeaf,
     );
     mountedSlotsSignature = slotsSignature();
     if (firstEnabledIndex(resolved) === -1) {
@@ -185,6 +297,12 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
       navbar?.render(activeIndex);
     }, 0);
     navbar.onSelect = (index) => {
+      // A pill tap during a live drag or the post-release glide would
+      // mutate activeIndex/setActiveLeaf state the settle epilogue also
+      // owns — worse for a command slot, where the note it opens can leave
+      // the chrome mounted (sync() is also gated on gestureInFlight) and
+      // then get yanked away when the epilogue's setActiveLeaf lands late.
+      if (gestureInFlight) return;
       const entry = resolved[index];
       if (!entry?.enabled) return;
       // Tap-only slots run their command and leave the bar where it is —
@@ -202,7 +320,8 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
     navbar.render(activeIndex);
 
     // Question B PASS → `document`: the pager runs before Obsidian's drawer
-    // handler and swallows the touch itself, so the swipe works edge to edge.
+    // handler and, once a horizontal drag claims, swallows the touch itself
+    // (see pager.ts) — so the swipe works edge to edge.
     // Question B FAIL → swap this for `container` and keep the carve-out
     // listener at the bottom of this file.
     pager = new PhoneChromePager(container, document, {
@@ -212,11 +331,38 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
         // Spec: disabled and tap-only slots are SKIPPED by the pager, so the
         // destination is the nearest pageable slot, not blindly ±1.
         const targetIndex = nextPageableIndex(resolved, activeIndex, direction);
-        if (targetIndex === -1 || !container) return null;
+        if (targetIndex === -1 || !container) {
+          // Edge of the bar (or the container itself is gone) — no pageable
+          // destination, but the spec still calls for rubber-band feedback,
+          // not silence. Cache the current leaf alone if we can resolve
+          // one; no paired `gesture`, no neighbour, nothing else touched.
+          rubberBand = null;
+          if (container) {
+            const currentEl = leafEl(slotLeaves()[activeIndex]);
+            if (currentEl) {
+              currentEl.addClass('portal-phone-dragging');
+              rubberBand = { el: currentEl, width: container.clientWidth || 1 };
+              gestureInFlight = true;
+            }
+          }
+          return null;
+        }
         const target = slotLeaves()[targetIndex];
         const currentEl = leafEl(slotLeaves()[activeIndex]);
         const neighbourEl = leafEl(target);
-        if (!target || !currentEl || !neighbourEl) return null;
+        if (!target || !currentEl || !neighbourEl) {
+          // A would-be destination exists by index, but its leaf isn't
+          // reachable inside the hub container (e.g. a slot whose view
+          // lives in the sidebar) — same rubber-band treatment as above.
+          rubberBand = null;
+          if (currentEl) {
+            currentEl.addClass('portal-phone-dragging');
+            rubberBand = { el: currentEl, width: container.clientWidth || 1 };
+            gestureInFlight = true;
+          }
+          return null;
+        }
+        rubberBand = null;
         // Neighbour views are deferred at rest (Obsidian 1.7+): mounting one
         // here, at first contact, is what lets the swipe show real content
         // without keeping every hub view alive all the time. Fire and forget —
@@ -238,31 +384,53 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
           width: container.clientWidth || 1,
         };
         // Marks the gesture as in flight for `sync()` — see its declaration
-        // above. Set last, after every DOM mutation above it, so the two
-        // null-return paths at the top of this callback stay exactly what
-        // they were: bail before touching anything, including this flag.
+        // above. Set last, after every DOM mutation above it.
         gestureInFlight = true;
         return neighbourEl;
       },
       onProgress: (progress) => {
         // Cached elements and width only — no queries, no layout, per frame.
-        if (!gesture) return;
-        const { currentEl, neighbourEl, width, targetIndex } = gesture;
-        currentEl.style.transform = `translateX(${-progress * width}px)`;
-        const offset = progress > 0 ? width : -width;
-        neighbourEl.style.transform = `translateX(${offset - progress * width}px)`;
-        navbar?.setProgress(activeIndex, progress, targetIndex);
+        if (gesture) {
+          const { currentEl, neighbourEl, width, targetIndex } = gesture;
+          currentEl.style.transform = `translateX(${-progress * width}px)`;
+          const offset = progress > 0 ? width : -width;
+          neighbourEl.style.transform = `translateX(${offset - progress * width}px)`;
+          navbar?.setProgress(activeIndex, progress, targetIndex);
+          return;
+        }
+        // Rubber-band: no destination, but the spec still calls for
+        // feedback rather than silence. `progress` here is ALREADY damped
+        // by the pager's RUBBER_BAND_FACTOR before it ever reaches this
+        // callback. Cached element and width only, same contract as above.
+        if (!rubberBand) return;
+        rubberBand.el.style.transform = `translateX(${-progress * rubberBand.width}px)`;
       },
       onSettle: (decision) => {
         const settled = gesture;
         gesture = null;
+        const settledRubberBand = rubberBand;
+        rubberBand = null;
         // Torn down mid-drag (plugin unload, container rebuilt, etc.) — the
         // caller is about to `clearTransforms()` and release `container`
         // itself; touching classes/transforms here would just be re-dirtying
         // DOM we no longer own.
         if (unmounted) return;
         if (!settled) {
-          // Rubber-band release with no neighbour: nothing moved but the bar.
+          if (settledRubberBand) {
+            // Spring the current leaf back to rest, cleaned up on settle
+            // like any other gesture.
+            const { el } = settledRubberBand;
+            el.addClass('portal-phone-settling');
+            el.style.transform = 'translateX(0)';
+            runOwnedEpilogue(el, () => {
+              gestureInFlight = false;
+              clearTransforms();
+              navbar?.render(activeIndex);
+            });
+            return;
+          }
+          // Nothing was ever claimable (e.g. the current leaf itself
+          // couldn't be resolved) — nothing moved but the bar.
           navbar?.render(activeIndex);
           return;
         }
@@ -271,11 +439,21 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
         const landing = goes ? targetIndex : activeIndex;
         const dir = targetIndex > activeIndex ? 1 : -1;
 
-        // Finish the slide with a transition instead of jump-cutting: set the
-        // final transforms, let the panel easing play, then hand the leaf
-        // over and clean up. `transitionend` can be swallowed if the element
-        // is hidden mid-flight, so a timeout backstop always runs the
-        // epilogue exactly once.
+        // Commit the new active index SYNCHRONOUSLY, before the visual
+        // glide even starts — not 350ms later when the epilogue finishes.
+        // A second swipe claimed during that glide (or under
+        // prefers-reduced-motion, where there is no transitionend and this
+        // window is always the full 350ms) must see the post-swipe
+        // activeIndex, or its onClaim computes nextPageableIndex from a
+        // stale base and grabs a currentEl already mid-transition. Only
+        // commit when the leaf actually resolves: an unresolved leaf must
+        // leave activeIndex exactly where it was.
+        const landingLeaf = slotLeaves()[landing];
+        if (landingLeaf) activeIndex = landing;
+
+        // Finish the slide with a transition instead of jump-cutting: set
+        // the final transforms, let the panel easing play, then hand the
+        // leaf over and clean up.
         currentEl.addClass('portal-phone-settling');
         neighbourEl.addClass('portal-phone-settling');
         currentEl.style.transform = goes
@@ -285,82 +463,27 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
           ? 'translateX(0)'
           : `translateX(${dir * width}px)`;
 
-        let done = false;
-        let epilogueTimer = 0;
-        let transitionListener: ((evt: Event) => void) | null = null;
-        // This epilogue's identity. Claiming ownership below (before the
-        // listener/timer are even wired up) means a slower-to-settle
-        // earlier epilogue that finishes after this one has already taken
-        // over will see itself superseded and back off.
-        const owner = Symbol('phone-chrome-settle-epilogue');
-        epilogueOwner = owner;
-
-        const finish = (): void => {
-          if (done) return;
-          done = true;
-          window.clearTimeout(epilogueTimer);
-          if (transitionListener) currentEl.removeEventListener('transitionend', transitionListener);
-          transitionListener = null;
-          if (epilogueOwner !== owner) {
-            // Superseded by a later swipe (or the pager's re-entrant-
-            // touchstart onSettle('back')) that claimed and is now the
-            // current owner of `cancelPendingEpilogue` / `gestureInFlight`.
-            // Touching either here would orphan that newer epilogue's
-            // canceller, and `clearTransforms()` below would strip its
-            // still-live `portal-phone-settling` classes and inline
-            // transforms mid-flight. Leave all of that — including the
-            // activeIndex commit and navbar re-render — to whichever
-            // epilogue is current when IT finishes; `clearTransforms()`
-            // sweeps every leaf in the container, not just this one's, so
-            // nothing here is left permanently dirty.
-            return;
-          }
-          cancelPendingEpilogue = null;
+        runOwnedEpilogue(currentEl, () => {
           gestureInFlight = false;
-          epilogueOwner = null;
           clearTransforms();
-          // Commit the new active index and hand the leaf over ONLY if it
-          // still resolves — an unresolved leaf must leave both the bar and
-          // the workspace's real active leaf exactly where they were, never
-          // advertise a slot that is not what is actually on screen.
+          // The workspace hand-off (focus, Obsidian's own active-leaf
+          // bookkeeping) waits for the visual glide to finish rather than
+          // firing mid-transition. activeIndex was already committed
+          // synchronously above; this re-resolves independently only to
+          // decide whether to call setActiveLeaf.
           const leaf = slotLeaves()[landing];
-          if (leaf) {
-            activeIndex = landing;
-            plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
-          }
+          if (leaf) plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
           navbar?.render(activeIndex);
-        };
-
-        transitionListener = (evt: Event): void => {
-          // The listener sits on `currentEl`, a whole `.workspace-leaf`
-          // subtree — any descendant's opacity/transform transition ending
-          // bubbles up. Only the leaf's OWN transform transition ending
-          // means the slide actually finished.
-          const te = evt as TransitionEvent;
-          if (te.target !== currentEl || te.propertyName !== 'transform') return;
-          finish();
-        };
-        currentEl.addEventListener('transitionend', transitionListener);
-        epilogueTimer = window.setTimeout(finish, SETTLE_EPILOGUE_MS);
-        cancelPendingEpilogue = (): void => {
-          window.clearTimeout(epilogueTimer);
-          if (transitionListener) currentEl.removeEventListener('transitionend', transitionListener);
-          transitionListener = null;
-          if (epilogueOwner === owner) {
-            gestureInFlight = false;
-            epilogueOwner = null;
-          }
-          cancelPendingEpilogue = null;
-        };
+        });
       },
     });
   };
 
   const sync = (): void => {
-    // Never touch the navbar/container mid-gesture — a `layout-change` from
-    // `loadIfDeferred()` (or any other event) firing while the finger is
-    // down, or during the post-release settle glide, must not re-render the
-    // bar out from under either.
+    // Never touch the navbar/container/state mid-gesture — a
+    // `layout-change` from `loadIfDeferred()` (or any other event) firing
+    // while the finger is down, or during the post-release settle glide,
+    // must not re-render the bar or remount out from under either.
     if (gestureInFlight) return;
 
     if (!plugin.settings.phoneChrome) {
@@ -374,6 +497,7 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
       plugin.settings.phoneChromeSlots,
       (type) => isViewTypeRegistered(plugin.app, type),
       (id) => isCommandRegistered(plugin.app, id),
+      hasReachableLeaf,
     );
 
     if (navbar) {
@@ -400,9 +524,10 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
   };
 
   // NOTE — only needed if the spike recorded Question B as FAIL. With the
-  // unified wiring above, the pager already swallows every hub touch at
-  // document capture and this listener must NOT exist: two listeners racing
-  // for the same touch is the bug that would ship the feature dead.
+  // unified wiring above, the pager already swallows every CLAIMED hub drag
+  // at document capture (see pager.ts's onTouchMove) and this listener must
+  // NOT exist: two listeners racing for the same touch is the bug that
+  // would ship the feature dead.
   //
   // Fallback shape, for reference. `stopImmediatePropagation` at document
   // capture halts propagation toward the target, so it may only ever fire
@@ -449,4 +574,11 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
   // alive for the rest of the session — a dead plugin still translating
   // leaves and swallowing touches.
   plugin.register(() => unmount());
+
+  // Exposed so the settings tab's `phoneChrome` toggle can apply live: the
+  // spec promises that, and without an explicit hook it would only take
+  // effect on the next layout-change/active-leaf-change (turning it OFF
+  // would leave the navbar mounted and the pager's touch listeners swallowing
+  // touches until then).
+  return sync;
 }
