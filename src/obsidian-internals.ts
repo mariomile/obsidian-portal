@@ -170,3 +170,30 @@ export function getBookmarks(app: App): Bookmark[] {
   walk(instance?.getBookmarks?.() ?? []);
   return out;
 }
+
+interface ViewRegistry {
+  viewByType?: Record<string, unknown>;
+}
+interface AppWithViewRegistry {
+  viewRegistry?: ViewRegistry;
+}
+interface CommandsRegistry {
+  commands?: Record<string, unknown>;
+}
+interface AppWithCommandRegistry {
+  commands?: CommandsRegistry;
+}
+
+/** True when a view type is registered (its plugin is installed and enabled).
+ *  `viewRegistry.viewByType` is untyped but long-stable; a structural miss
+ *  returns false so a slot degrades to disabled rather than throwing. */
+export function isViewTypeRegistered(app: App, type: string): boolean {
+  const registry = (app as unknown as AppWithViewRegistry).viewRegistry?.viewByType;
+  return typeof registry === 'object' && registry !== null && type in registry;
+}
+
+/** True when a command id exists. Same defensive posture as above. */
+export function isCommandRegistered(app: App, id: string): boolean {
+  const registry = (app as unknown as AppWithCommandRegistry).commands?.commands;
+  return typeof registry === 'object' && registry !== null && id in registry;
+}
