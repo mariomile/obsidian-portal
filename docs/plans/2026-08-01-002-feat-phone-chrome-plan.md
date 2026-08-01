@@ -1676,6 +1676,10 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
 
     const host = container.parentElement ?? container;
     navbar = new PhoneChromeNavbar(host, resolved);
+    // Backstop 2: the container may gain its width a frame after we attach.
+    // render() is idempotent and no-ops at zero width, so an extra call is
+    // free; without it a mount into an unlaid-out host is permanent.
+    window.setTimeout(() => navbar?.render(activeIndex), 0);
     navbar.onSelect = (index) => {
       const entry = resolved[index];
       if (!entry?.enabled) return;
@@ -1823,6 +1827,20 @@ export function installPhoneChrome(plugin: PortalPlugin): void {
   plugin.registerEvent(plugin.app.workspace.on('layout-change', sync));
   plugin.registerEvent(plugin.app.workspace.on('active-leaf-change', sync));
   plugin.app.workspace.onLayoutReady(sync);
+
+  // The navbar measures itself in render() and gives up when the host has no
+  // width yet — a deferred or hidden leaf mounts at 0px, every slot stacks at
+  // x=0, and nothing in the navbar schedules a retry. Two backstops, because
+  // the failure is silent and permanent otherwise:
+  //   1. re-render on viewport resize (rotation, keyboard, split changes)
+  //   2. one deferred re-render after mount, for the case where the container
+  //      is laid out a frame after we attach
+  // Obsidian's rAF and ResizeObserver both starve on an idle pane, so this
+  // leans on window resize plus an explicit timeout rather than an observer.
+  plugin.registerDomEvent(window, 'resize', () => {
+    if (!plugin.settings.phoneChrome) return;
+    navbar?.render(activeIndex);
+  });
 }
 ```
 
