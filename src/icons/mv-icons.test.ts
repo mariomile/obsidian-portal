@@ -75,15 +75,16 @@ test('resolves the Lucide alias pairs to a single glyph each', () => {
   }
 });
 
-test('every glyph uses the addIcon viewBox-safe scale wrapper', () => {
-  // 100 / 256 = 0.390625 — required because addIcon() forces viewBox
-  // "0 0 100 100" while Phosphor draws on a 256 grid. Without it the glyphs
-  // render ~2.5x oversized.
-  assert.match(source, /scale\(\$\{SCALE\}\)/);
-  assert.match(source, /const SCALE = '0\.390625'/);
-  // No other, hard-coded scale factor may sneak in.
-  const literals = source.match(/scale\(\d[^)]*\)/g) ?? [];
-  assert.deepEqual(literals, [], `unexpected hard-coded transform scale: ${literals.join(', ')}`);
+test('every glyph is wrapped in the addIcon viewBox-safe transform', () => {
+  // addIcon() forces viewBox "0 0 100 100", so each glyph needs a transform
+  // mapping the set's native grid onto it. Material draws on a 960 grid whose
+  // origin is y = -960: scaling alone would leave every glyph outside the box,
+  // so the translate has to come first (SVG composes right-to-left).
+  assert.match(source, /transform="\$\{TRANSFORM\}"/);
+  assert.match(source, /const TRANSFORM = 'scale\(0\.1041667\) translate\(0 960\)'/);
+  // The transform must be applied through the constant, never inlined per glyph.
+  const inline = source.match(/<g transform="(?!\$\{TRANSFORM\})/g) ?? [];
+  assert.deepEqual(inline, [], 'glyphs must share one transform constant');
 });
 
 test('path data reaches the DOM whole, never split', () => {
@@ -112,8 +113,13 @@ test('glyphs are solid (fill), not stroked', () => {
 });
 
 test('registers a broad set, not a token handful', () => {
+  // A floor, not a target. How many Lucide names a set can cover depends on how
+  // closely its vocabulary tracks Lucide's — Material's diverges more than
+  // Phosphor's did, so the absolute number moves when the set changes. What
+  // actually has to hold is the targeted coverage asserted in the two tests
+  // below: the names this vault really draws.
   const keys = source.match(/^ {2}'[a-z0-9-]+':/gm) ?? [];
-  assert.ok(keys.length >= 500, `expected 500+ registered names, found ${keys.length}`);
+  assert.ok(keys.length >= 400, `expected 400+ registered names, found ${keys.length}`);
 });
 
 test('covers every Lucide name observed in this vault’s live chrome', () => {
