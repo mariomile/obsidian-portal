@@ -17,10 +17,8 @@ const TAB_CONTAINER =
   '.workspace-tabs.mod-visible > .workspace-tab-container';
 /** Marks a sibling leaf we forced visible for the duration of a gesture. */
 const PEEK_CLASS = 'portal-phone-peek';
-/** Marks the container while the PAGER owns it — hub level only. The navbar
- *  no longer needs this: it mounts into the container's parent regardless of
- *  hub/detail level, so this stays a pure gesture-ownership marker (styling
- *  + touch-action for the swipe), not a "chrome is mounted at all" marker. */
+/** Marks the container while the chrome (navbar + pager) is mounted — hub
+ *  level only. Styling + touch-action for the swipe. */
 const HUB_CLASS = 'portal-phone-hub';
 /** How long the post-release glide (`.portal-phone-settling`, styles.css) is
  *  allowed to run before the epilogue's timeout backstop fires regardless of
@@ -28,30 +26,21 @@ const HUB_CLASS = 'portal-phone-hub';
 const SETTLE_EPILOGUE_MS = 350;
 
 /**
- * Phone-only hub chrome: a segmented navbar, always visible on phone, plus a
- * swipe pager that exists only at hub level.
+ * Phone-only hub chrome: a segmented navbar plus a swipe pager, both scoped
+ * to hub level ONLY — the active leaf matching one of the configured slots.
  *
- * The navbar and the pager answer two different questions and live on two
- * different lifecycles — decoupled on purpose, because coupling them (the
- * original design) meant the whole chrome unmounted the moment a note took
- * over, leaving no way to navigate away from a note except Obsidian's own
- * back/menu:
- * - **Navbar** — mounted whenever `phoneChrome` is on, we're on a phone, and
- *   the tab container exists, at hub level AND inside a note. Tapping a pill
- *   navigates from anywhere via the same `onSelect` path (including lazy
- *   leaf creation via `createSlotLeaf`).
- * - **Pager** — created the moment `sync()` sees the active leaf become one
- *   of the configured slots ("hub level"), destroyed the moment a note takes
- *   over. No listeners, no `stopImmediatePropagation`, nothing exists inside
- *   a note — that absence, not just inertness, is what keeps the swipe from
- *   ever competing with CodeMirror's text selection and horizontal drags.
+ * Mounted the moment `sync()` sees the active leaf become a slot, torn down
+ * the moment a note takes over, which is what keeps the gesture from ever
+ * competing with CodeMirror's text selection and horizontal drags: nothing
+ * exists inside a note, not just something inert. `openHub()` — the
+ * `open-phone-hub` command and its ribbon icon — is the way IN: from inside
+ * a note there is no bar to tap, so it is the primary entry point, not a
+ * shortcut.
  *
- * At detail level (inside a note) no slot is active, so the navbar renders
- * every slot collapsed — icon-only, no expanded pill, no label, no active
- * highlight (`.portal-phone-navbar.is-detail`, styles.css) — rather than
- * advertise a stale selection. `activeIndex` still tracks the last HUB-level
- * slot internally (see its declaration below) so returning to a hub view is
- * stable.
+ * Earlier this shipped with the navbar always mounted (hub level AND inside
+ * a note, collapsed to icon-only there) so a pill was reachable from
+ * anywhere. Reverted: the bar has no place riding along on every note, and
+ * `openHub()` already solves "how do I get back" without it.
  *
  * While the pager is mounted, Obsidian's edge-drag drawers are suppressed
  * once a horizontal drag actually claims (see `pager.ts`): at hub level the
@@ -72,12 +61,8 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
   let pager: PhoneChromePager | null = null;
   let container: HTMLElement | null = null;
   let resolved: ResolvedSlot[] = [];
-  /** Index of the last known HUB-level slot. Meaningless at detail level (no
-   *  slot is active inside a note) and deliberately NOT reset when the pager
-   *  tears down on leaving hub — so returning to a hub view lands back on a
-   *  stable highlight instead of snapping to slot 0. Only updated while
-   *  `atHub` is true (see `renderNavbar()`); the pager's callbacks still read
-   *  it live via closure, same as before this task. */
+  /** Index of the active slot. Only meaningful while the chrome is mounted
+   *  (hub level); read live via closure by the pager's callbacks. */
   let activeIndex = 0;
   /** Per-gesture cache for a PAIRED drag (current leaf + a real neighbour),
    *  filled at claim and reused by every frame. Gesture frames must never
@@ -433,14 +418,12 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
   };
 
   /** Explicit, one-tap entry point to hub level — the `open-phone-hub`
-   *  command and its ribbon icon both call this. Now that the navbar is
-   *  always mounted on phone (hub level AND inside a note — see the module
-   *  doc comment), tapping any pill already gets the user there; this is a
-   *  redundant but harmless shortcut, kept because it is still the fastest
-   *  way in and needs no bar in view. Activates (or, lazily, creates) a
-   *  hub-level leaf directly; `sync()` (already wired to `active-leaf-
-   *  change`) takes it from there and mounts the pager — this function never
-   *  touches the navbar/pager/container itself. */
+   *  command and its ribbon icon both call this — the PRIMARY way in, since
+   *  the bar itself is invisible from inside a note (see the module doc
+   *  comment). Activates (or, lazily, creates) a hub-level leaf directly;
+   *  `sync()` (already wired to `active-leaf-change`) takes it from there and
+   *  mounts the whole chrome — this function never touches the
+   *  navbar/pager/container itself. */
   const openHub = (): void => {
     if (!plugin.settings.phoneChrome) return;
     const target = pickHubTarget();
@@ -467,25 +450,20 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
 
   /** Single source of truth for "what does the bar look like right now" —
    *  used by `sync()`, the mount-time render backstop, and the resize
-   *  backstop. `indexOfActiveLeaf()` is a workspace query, which is fine
-   *  here (never called from a gesture frame — `onProgress` stays
-   *  cache-only). Updates `activeIndex` only while at hub level (see its own
-   *  doc comment above); renders the navbar collapsed with no active
-   *  highlight otherwise. Returns whether we're at hub level right now, so
-   *  `sync()` can drive the pager's independent lifecycle off the same
-   *  answer instead of asking twice. */
-  const renderNavbar = (): boolean => {
-    const atHub = indexOfActiveLeaf() !== -1;
-    if (atHub) activeIndex = Math.max(0, indexOfActiveLeaf());
-    navbar?.render(activeIndex, { detail: !atHub });
-    return atHub;
+   *  backstop. `indexOfActiveLeaf()` is a workspace query, which is fine here
+   *  (never called from a gesture frame — `onProgress` stays cache-only). The
+   *  navbar exists only at hub level, so this is only ever called while
+   *  `indexOfActiveLeaf() !== -1` — `sync()` owns that check and the
+   *  mount/unmount decision it drives. */
+  const renderNavbar = (): void => {
+    activeIndex = Math.max(0, indexOfActiveLeaf());
+    navbar?.render(activeIndex);
   };
 
-  /** Mounts the navbar into the tab container's PARENT — the same host at
-   *  hub level and at detail level, since `container` (`TAB_CONTAINER`) is
-   *  the shared root every leaf lives inside, note or slot alike, so there
-   *  is exactly one mounting path. Never touches the pager — that lifecycle
-   *  is `mountPager()`/`teardownPager()`, driven separately by `atHub`. */
+  /** Mounts the navbar into the tab container's PARENT. Never touches the
+   *  pager — that lifecycle is `mountPager()`/`teardownPager()`, called
+   *  together with this by `sync()` since both now share one hub-level
+   *  condition. */
   const mountNavbar = (found: HTMLElement): void => {
     container = found;
     mountedSlotsSignature = slotsSignature();
@@ -505,21 +483,19 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
     navbar.onSelect = (index) => {
       // A pill tap during a live drag or the post-release glide would
       // mutate activeIndex/setActiveLeaf state the settle epilogue also
-      // owns — worse for a command slot, where the note it opens can leave
-      // the chrome mounted (sync() is also gated on gestureInFlight) and
-      // then get yanked away when the epilogue's setActiveLeaf lands late.
+      // owns.
       if (gestureInFlight) return;
       const entry = resolved[index];
       if (!entry?.enabled) return;
-      // Tap-only: either a command slot (run it and leave the bar where it
-      // is — the command usually opens a note, which is fine now that the
-      // navbar stays mounted there too — see the module doc comment), or a
-      // view slot that is enabled but has no reachable leaf yet. The latter
-      // is the lazy-creation path: create the leaf in the workspace ROOT
-      // (never a sidebar — see `TAB_CONTAINER`/`leafEl()`), then let
-      // `sync()` pick up the new leaf and bring the bar (and `activeIndex`)
-      // up to date. Never done at mount and never during a gesture — see
-      // the module doc comment on why creation stays lazy.
+      // Tap-only: either a command slot (runs it — usually opens a note,
+      // which the next sync() sees as leaving hub level and unmounts the
+      // whole chrome for, same as any other navigation away), or a view slot
+      // that is enabled but has no reachable leaf yet. The latter is the
+      // lazy-creation path: create the leaf in the workspace ROOT (never a
+      // sidebar — see `TAB_CONTAINER`/`leafEl()`), then let `sync()` pick up
+      // the new leaf and bring the bar (and `activeIndex`) up to date. Never
+      // done at mount and never during a gesture — see the module doc
+      // comment on why creation stays lazy.
       if (!entry.pageable) {
         if (entry.slot.commandId) {
           executeCommand(plugin.app, entry.slot.commandId);
@@ -530,17 +506,15 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
         createSlotLeaf(viewType);
         return;
       }
-      // Pageable slots are reachable regardless of whether we were at hub or
-      // detail level when tapped — this IS the "navigate from inside a
-      // note" path. Render non-detail immediately rather than waiting for
-      // the `active-leaf-change` this `setActiveLeaf` fires (sync() will
-      // also run off that event and agree, redundantly but harmlessly): we
-      // already know for certain we just landed on a hub slot.
+      // Render immediately rather than waiting for the `active-leaf-change`
+      // this `setActiveLeaf` fires (sync() will also run off that event and
+      // agree, redundantly but harmlessly): we already know for certain
+      // which slot we just landed on.
       const leaf = slotLeaves()[index];
       if (!leaf) return;
       activeIndex = index;
       plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
-      navbar?.render(activeIndex, { detail: false });
+      navbar?.render(activeIndex);
     };
   };
 
@@ -774,20 +748,23 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
       }
     }
 
+    // The whole chrome — navbar AND pager — exists only at hub level: the
+    // active leaf matching one of the configured slots. Anywhere else
+    // (a note, an unrelated view) there is nothing to show and nothing to
+    // page between, so both come down together. `openHub()` is the way in.
+    const atHub = indexOfActiveLeaf() !== -1;
+    if (!atHub) {
+      if (navbar) unmount();
+      return;
+    }
     if (!navbar) {
       // Nothing usable to show at all — stay fully unmounted rather than
       // injecting an all-disabled bar.
       if (firstEnabledIndex(resolved) === -1) return;
       mountNavbar(liveContainer);
     }
-
-    // The navbar is visible at hub level AND at detail level; the pager
-    // exists only at hub level. `renderNavbar()` decides which of those two
-    // this sync is looking at and renders accordingly; its return value
-    // drives the pager's independent lifecycle below.
-    const atHub = renderNavbar();
-    if (atHub && !pager) mountPager();
-    else if (!atHub && pager) teardownPager();
+    renderNavbar();
+    if (!pager) mountPager();
   };
 
   // NOTE — only needed if the spike recorded Question B as FAIL. With the
@@ -828,7 +805,7 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
   // Obsidian's rAF and ResizeObserver both starve on an idle pane, so this
   // leans on window resize plus an explicit timeout rather than an observer.
   plugin.registerDomEvent(window, 'resize', () => {
-    if (!plugin.settings.phoneChrome) return;
+    if (!plugin.settings.phoneChrome || !navbar) return;
     // Same gate as sync(): a rotation mid-drag must not snap the bar to
     // progress 0 while the finger is down or the settle glide is playing.
     if (gestureInFlight) return;

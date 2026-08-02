@@ -613,18 +613,6 @@ body.is-phone .portal-section-header {
   color: var(--text-faint);
 }
 
-/* Detail level (inside a note): no slot is active, so every slot collapses
-   to icon-only (the pill geometry itself already collapses — navbar.ts
-   renders with an out-of-range index) and reads uniformly dimmed, "you are
-   not in any of these", rather than keep advertising whichever slot was
-   last active at hub level. */
-/* Detail level: no slot is active, but every slot is still TAPPABLE — so they
-   read as inactive chrome, not as disabled controls. --text-faint is the
-   disabled colour and made them look like leftover debris on the page. */
-.portal-phone-navbar.is-detail .portal-phone-slot {
-  color: var(--text-muted);
-}
-
 /* 3-slice capsule wash. The wrapper only fades; its slices only transform. */
 .portal-phone-slot-bg {
   position: absolute;

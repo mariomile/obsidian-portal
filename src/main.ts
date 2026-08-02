@@ -1,6 +1,7 @@
 import { Plugin } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import { installMvIcons, refreshRenderedIcons } from './kit/mv-icons';
+import { writeIconDiagnostics } from './icons/diagnostics';
 import { installMobileHeaderBack } from './nav/mobile-header-back';
 import { installNoteEnter } from './nav/note-enter';
 import { installPhoneChrome } from './phone-chrome/hub-level';
@@ -77,6 +78,21 @@ export default class PortalPlugin extends Plugin {
       name: 'Open Portal',
       callback: () => {
         void this.activateView();
+      },
+    });
+
+    // Debugging aid, not a feature: the phone navbar cannot be inspected from
+    // a desktop, so this dumps what is actually rendered into a note that Sync
+    // carries back. Cheap to keep, and the alternative is guessing.
+    this.addCommand({
+      id: 'diagnose-icons',
+      name: 'Diagnose icons (writes a report to the vault)',
+      callback: () => {
+        void writeIconDiagnostics(this.app, {
+          version: this.manifest.version,
+          mvIcons: this.settings.mvIcons,
+          settling: document.body.hasClass(ICONS_SETTLING_CLASS),
+        });
       },
     });
 

@@ -80,17 +80,11 @@ export class PhoneChromeNavbar {
   }
 
   /** Snap the bar to a settled state (mount, tap, or post-gesture). The ONLY
-   *  place that reads layout — gesture frames reuse what this cached.
-   *
-   *  `options.detail: true` renders the DETACHED state used inside a note,
-   *  where no slot is active: every slot collapses to icon-only (no
-   *  expanded pill, no label, no active highlight) rather than advertise a
-   *  stale selection. Forcing an out-of-range index through the same
-   *  `apply()` pill-geometry math that drives the normal hub render is what
-   *  guarantees this — there is no separate detail layout to keep in sync.
-   *  Also toggles `.is-detail` on the root so styles.css can style the
-   *  detached state independently (uniform dimming, currently). */
-  render(activeIndex: number, options?: { detail?: boolean }): void {
+   *  place that reads layout — gesture frames reuse what this cached. The bar
+   *  exists only at hub level (see hub-level.ts), so `activeIndex` is always
+   *  a real, currently-active slot here — there is no detached/collapsed
+   *  state to render. */
+  render(activeIndex: number): void {
     this.barWidth = this.el.clientWidth;
     if (this.barWidth > 0) {
       const styles = getComputedStyle(this.el);
@@ -99,10 +93,8 @@ export class PhoneChromeNavbar {
       this.gap = parseFloat(styles.getPropertyValue('--portal-phone-gap')) || 8;
       this.capWidth = this.iconWidth / 2;
     }
-    const detail = options?.detail ?? false;
     this.el.toggleClass('is-animating', true);
-    this.el.toggleClass('is-detail', detail);
-    this.apply(detail ? -1 : activeIndex, 0, undefined);
+    this.apply(activeIndex, 0, undefined);
   }
 
   /** Drive the bar from live gesture progress. No transitions and no layout
