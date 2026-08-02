@@ -88,6 +88,16 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
    *  anymore. Distinct from `unmounted`, which is transient (true only
    *  during a single synchronous `unmount()` call). */
   let disposed = false;
+  /** View types with a lazy leaf-creation tap currently in flight (see
+   *  `navbar.onSelect`). `resolved`/`pageable` only catch up with a newly
+   *  created leaf once `sync()` runs at the end of that tap's promise
+   *  chain, so a second tap on the same still-`!pageable` slot inside that
+   *  window would otherwise call `getLeaf('tab')` again —
+   *  `createLeafInTabGroup` only recycles an EMPTY most-recent child, which
+   *  a freshly-created hub leaf is not, so two leaves would exist for one
+   *  slot. Keyed by view type, not slot index: it's "is a leaf for this
+   *  view type already being created", not a per-slot concept. */
+  const creating = new Set<string>();
   /** Handle for the mount-time `setTimeout(0)` render backstop, so unload
    *  mid-flight can cancel it instead of letting it fire against a torn-down
    *  navbar. */
@@ -128,14 +138,42 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
 
   const slotsSignature = (): string => JSON.stringify(plugin.settings.phoneChromeSlots);
 
+  /** Raw `.workspace-leaf` wrapper for `leaf`, with NO container-membership
+   *  check — the one shared DOM primitive every reachability lookup below
+   *  builds on, so there is exactly one place that knows how to go from a
+   *  `WorkspaceLeaf` to its DOM element. */
+  const leafElRaw = (leaf: WorkspaceLeaf | null | undefined): HTMLElement | null =>
+    (leaf?.view.containerEl.closest('.workspace-leaf') as HTMLElement | null) ?? null;
+
+  /** The open leaf of `viewType` that is actually reachable inside `target`
+   *  (a child of it), or null. Deliberately NOT `getLeavesOfType(type)[0]`:
+   *  a view type can have more than one leaf open at once — the clearest
+   *  case is `portal` itself, which normally lives in the LEFT SIDEBAR
+   *  (`main.ts`'s `activateView`) but can now also get a hub leaf created
+   *  lazily on tap (see `navbar.onSelect` below) — and this file has no
+   *  business depending on which one `getLeavesOfType` happens to enumerate
+   *  first. `slotLeaves()` and `hasReachableLeaf()` both resolve through
+   *  this one lookup, so they can never disagree about which leaf "counts". */
+  const reachableLeafOfType = (
+    viewType: string,
+    target: HTMLElement | null,
+  ): WorkspaceLeaf | null => {
+    if (!target) return null;
+    return (
+      plugin.app.workspace
+        .getLeavesOfType(viewType)
+        .find((l) => leafElRaw(l)?.parentElement === target) ?? null
+    );
+  };
+
   const slotLeaves = (): (WorkspaceLeaf | null)[] =>
     resolved.map(({ slot, enabled }) => {
       if (!enabled || !slot.viewType) return null;
-      return plugin.app.workspace.getLeavesOfType(slot.viewType)[0] ?? null;
+      return reachableLeafOfType(slot.viewType, container);
     });
 
   const leafEl = (leaf: WorkspaceLeaf | null | undefined): HTMLElement | null => {
-    const el = (leaf?.view.containerEl.closest('.workspace-leaf') as HTMLElement | null) ?? null;
+    const el = leafElRaw(leaf);
     // A leaf outside the tab container (e.g. Portal's own view, opened via
     // getLeftLeaf in the LEFT SIDEBAR — the shipped default slot 0) is
     // invisible to clearTransforms(), which only sweeps container.children,
@@ -149,18 +187,16 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
 
   /** Is there an open leaf for `viewType`, actually reachable inside the hub
    *  container (a child of it)? Feeds `resolveSlots`' `hasReachableLeaf`
-   *  predicate: a view slot with no open leaf, or one that lives outside the
-   *  hub, must report disabled rather than advertising a tap/swipe
-   *  destination that goes nowhere. Falls back to a live DOM query when
-   *  `container` isn't set yet (called from `sync()` before the first
-   *  mount, to decide whether hub level should even engage) — the container
-   *  `mount()` would attach to if it decided to. */
+   *  predicate, which gates `pageable` only — a view slot with no reachable
+   *  leaf is still `enabled` (tapping it can create one lazily, see
+   *  `navbar.onSelect`), just not yet a swipe destination that goes
+   *  anywhere. Falls back to a live DOM query when `container` isn't set
+   *  yet (called from `sync()` before the first mount, to decide whether
+   *  hub level should even engage) — the container `mount()` would attach
+   *  to if it decided to. */
   const hasReachableLeaf = (viewType: string): boolean => {
     const target = container ?? document.querySelector<HTMLElement>(TAB_CONTAINER);
-    if (!target) return false;
-    const leaf = plugin.app.workspace.getLeavesOfType(viewType)[0];
-    const el = (leaf?.view.containerEl.closest('.workspace-leaf') as HTMLElement | null) ?? null;
-    return el?.parentElement === target;
+    return reachableLeafOfType(viewType, target) !== null;
   };
 
   const indexOfActiveLeaf = (): number => {
@@ -329,25 +365,46 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
         }
         const viewType = entry.slot.viewType;
         if (!viewType) return;
-        void plugin.app.workspace
-          .getLeaf('tab')
-          .setViewState({ type: viewType, active: true })
-          .then(() => {
-            // A failed creation (rejected promise) never reaches this
-            // branch — the bar is left exactly as it was, not half
-            // committed. A successful one is picked up here rather than by
-            // reaching into the new leaf ourselves: `sync()` re-resolves
-            // `resolved`/`activeIndex` from scratch, which keeps this one
-            // code path (not two) responsible for bringing the bar to a
-            // consistent state.
-            if (disposed) return;
-            sync();
-          })
-          .catch(() => {
-            // setViewState rejected (e.g. the view's own onOpen threw) —
-            // nothing to clean up: no leaf reference was kept, and the bar
-            // was never touched, so there is nothing to roll back.
-          });
+        // See `creating`'s doc comment: guards the async window between
+        // this tap and setViewState's promise resolving.
+        if (creating.has(viewType)) return;
+        creating.add(viewType);
+        const doneCreating = (): void => {
+          creating.delete(viewType);
+        };
+        const logFailure = (err: unknown): void => {
+          // Logged, not silent: a view whose `onOpen` throws would
+          // otherwise leave a permanently dead pill with zero diagnostics.
+          console.error(`Portal: failed to open "${viewType}" from the phone hub`, err);
+        };
+        try {
+          void plugin.app.workspace
+            .getLeaf('tab')
+            .setViewState({ type: viewType, active: true })
+            .then(() => {
+              // A failed creation (rejected promise, or the synchronous
+              // throw handled in the catch block below) never reaches this
+              // branch — the bar is left exactly as it was, not half
+              // committed. A successful one is picked up here rather than
+              // by reaching into the new leaf ourselves: `sync()`
+              // re-resolves `resolved`/`activeIndex` from scratch, which
+              // keeps this one code path (not two) responsible for
+              // bringing the bar to a consistent state.
+              if (disposed) return;
+              sync();
+            })
+            .catch(logFailure)
+            .finally(doneCreating);
+        } catch (err) {
+          // `getLeaf('tab')` itself can throw SYNCHRONOUSLY (e.g. "No tab
+          // group found.") before the promise chain above even exists, so
+          // that path would otherwise never reach `.catch()` — same
+          // non-committal handling and logging, just reached a different
+          // way. `.finally()` above never runs in this branch, so clean up
+          // `creating` here instead.
+          doneCreating();
+          logFailure(err);
+        }
         return;
       }
       const leaf = slotLeaves()[index];

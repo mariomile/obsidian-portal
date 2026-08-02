@@ -37,8 +37,8 @@ export default class PortalPlugin extends Plugin {
   async onload(): Promise<void> {
     this.settings = parseSettings(await this.loadData());
 
-    // Re-skin Obsidian's Lucide icons with the Phosphor `fill` set before any
-    // view or chrome renders. This writes into Obsidian's global icon registry,
+    // Re-skin Obsidian's Lucide icons with the unified set before any view or
+    // chrome renders. This writes into Obsidian's global icon registry,
     // so it also re-skins every other plugin that calls setIcon() — that is how
     // the whole suite changes set without any of them being modified.
     // No runtime undo exists, so disabling it takes effect on the next app
@@ -181,9 +181,19 @@ export default class PortalPlugin extends Plugin {
   private async activateView(reveal = true): Promise<void> {
     const { workspace } = this.app;
     const existing = workspace.getLeavesOfType(PORTAL_VIEW_TYPE);
-    const first = existing[0];
-    if (first) {
-      if (reveal) workspace.revealLeaf(first);
+    // Phone-chrome's hub navbar can now lazily create a SECOND `portal`
+    // leaf in the workspace root split (its "Files" slot, created on tap —
+    // see phone-chrome/hub-level.ts) alongside this method's own sidebar
+    // leaf. `getLeavesOfType` enumerates the root split first, so blindly
+    // taking `existing[0]` would reveal the hub's main-area leaf instead of
+    // the sidebar rail after a single hub tap — a phone-only feature
+    // silently regressing this desktop (and ribbon/command) affordance.
+    // Select the sidebar leaf specifically, regardless of enumeration order.
+    const sidebarLeaf = existing.find(
+      (l) => l.getRoot() === workspace.leftSplit || l.getRoot() === workspace.rightSplit,
+    );
+    if (sidebarLeaf) {
+      if (reveal) workspace.revealLeaf(sidebarLeaf);
       return;
     }
     const leaf = workspace.getLeftLeaf(false);
