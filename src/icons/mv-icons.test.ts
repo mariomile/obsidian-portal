@@ -246,6 +246,25 @@ test('third-party artwork is attributed, in the app as well as the repo', () => 
   const settings = readFileSync(new URL('../settings.ts', import.meta.url), 'utf8');
   assert.match(settings, /Solar Icon Set/, 'settings must carry the credit');
   assert.match(settings, /CC BY 4\.0/, 'settings must name the licence');
+
+  // Three glyphs come from a second set, which carries its own licence.
+  assert.match(notice, /MingCute/, 'the secondary set must be attributed too');
+  const apache = readFileSync(new URL('../../LICENSE-APACHE-2.0', import.meta.url), 'utf8');
+  assert.match(apache, /Apache License/);
+});
+
+test('the primary UI symbols are bare, not enclosed in a filled shape', () => {
+  // Regression guard for a real defect. Solar has no bare `plus`/`x`/`check`,
+  // only circled ones, and in duotone the circle renders as a filled disc — the
+  // navbar's "+" came out as a white blob with a notch in it. These three must
+  // stay single-shape signs, never a container plus a cutout.
+  for (const name of ['plus', 'x', 'check']) {
+    const body = new RegExp(`'${name}': '([^']+)'`).exec(source)?.[1];
+    assert.ok(body, `missing glyph: ${name}`);
+    const shapes = (body.match(/<(?:path|circle|ellipse|rect)\b/g) ?? []).length;
+    assert.equal(shapes, 1, `${name} must be one bare shape, found ${shapes}`);
+    assert.ok(!/opacity=/.test(body), `${name} must not carry a duotone container`);
+  }
 });
 
 test('carries no Iconize dependency', () => {

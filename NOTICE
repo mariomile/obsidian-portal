@@ -52,3 +52,37 @@ The glyphs are redistributed in modified form. Specifically:
      Portal's own and is not part of the Solar Icon Set.
 
 No other changes were made to the artwork.
+
+--------------------------------------------------------------------------------
+MingCute
+--------------------------------------------------------------------------------
+
+Three glyphs — `plus`, `x` and `check` — come from MingCute rather than Solar.
+
+    Icons:    MingCute by Richard9394
+    Source:   https://github.com/Richard9394/MingCute
+    Package:  @iconify-json/mingcute (variant: -fill)
+    License:  Apache License, Version 2.0
+
+A copy of the Apache License, Version 2.0 is included in this repository as
+LICENSE-APACHE-2.0.
+
+WHY A SECOND SET
+----------------
+
+Solar has no bare geometric symbols: there is no `plus`, `x` or `check`, only
+`add-circle`, `close-circle` and `check-circle` — always inside a container.
+In the Bold Duotone style that container renders as a filled disc, so the
+primary interface commands (the navbar's "+", a close button) came out as
+blobs rather than signs.
+
+MingCute draws these on the same 24-unit grid as Solar, so the three glyphs
+share the identical transform and need no special handling. The graft is
+deliberate and limited to symbols that carry no family character: a plus sign
+looks the same in every icon set, whereas a `folder` or a `brain` does not.
+
+MODIFICATIONS
+-------------
+
+Same as above: the SVG body is embedded as a string literal, wrapped in the
+grid transform, and indexed under a Lucide name. The artwork is unaltered.
