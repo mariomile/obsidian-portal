@@ -1,4 +1,5 @@
 import { PluginSettingTab, Setting } from 'obsidian';
+import { MV_ICON_VARIANTS } from './kit/mv-icons';
 import type { App } from 'obsidian';
 import type PortalPlugin from './main';
 import {
@@ -70,6 +71,14 @@ export interface PortalSettings {
    *  for that, and `addIcon()` has no runtime undo — a default-on version could
    *  not be taken back without an app restart. Opt-in only. */
   mvIcons: boolean;
+  /** Which weight of the icon set to register.
+   *
+   *  Empty means the set's own default. A weight only applies to the ~120
+   *  icons that actually appear on screen — bundling every weight for all 393
+   *  names would cost around 1.7 MB, against 340 MB for these. The rest keep
+   *  the default, and in practice nobody sees them change: they only show up
+   *  in menus and dialogs. */
+  mvIconVariant: string;
   /** Folder path → icon name, the tree's per-folder icon overrides.
    *
    *  This replaces reading Iconize's (`obsidian-icon-folder`) assignments at
@@ -106,6 +115,7 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   desktopNoteTransition: false,
   hiddenFolders: [],
   mvIcons: false,
+  mvIconVariant: '',
   // Empty by design: Portal ships to other vaults, so folder→icon choices are
   // user config, never defaults baked into the plugin.
   folderIcons: {},
@@ -178,6 +188,10 @@ export function parseSettings(raw: unknown): PortalSettings {
           typeof data.hugeCoreIcons === 'boolean'
           ? data.hugeCoreIcons
           : DEFAULT_SETTINGS.mvIcons,
+    mvIconVariant:
+      typeof data.mvIconVariant === 'string'
+        ? data.mvIconVariant
+        : DEFAULT_SETTINGS.mvIconVariant,
     folderIcons: asStringRecord(data.folderIcons, DEFAULT_SETTINGS.folderIcons),
     mobileHeaderBack:
       typeof data.mobileHeaderBack === 'boolean'
@@ -247,8 +261,25 @@ export class PortalSettingTab extends PluginSettingTab {
         toggle.setValue(this.plugin.settings.mvIcons).onChange(async (value) => {
           this.plugin.settings.mvIcons = value;
           await this.plugin.saveSettings();
+          await this.plugin.applyIconVariant();
         }),
       );
+
+    new Setting(containerEl)
+      .setName('Icon weight')
+      .setDesc(
+        'How heavy the icons are drawn. The change is immediate for the icons Obsidian draws at launch, and applies to the rest on the next restart — icon registrations cannot be undone while the app is running.',
+      )
+      .addDropdown((drop) => {
+        for (const v of MV_ICON_VARIANTS) drop.addOption(v.id, `${v.label} — ${v.note}`);
+        drop
+          .setValue(this.plugin.settings.mvIconVariant || MV_ICON_VARIANTS[0].id)
+          .onChange(async (value) => {
+            this.plugin.settings.mvIconVariant = value;
+            await this.plugin.saveSettings();
+            await this.plugin.applyIconVariant();
+          });
+      });
 
     new Setting(containerEl)
       .setName('Back button in header (phone)')

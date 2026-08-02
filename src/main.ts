@@ -46,7 +46,7 @@ export default class PortalPlugin extends Plugin {
     // No runtime undo exists, so disabling it takes effect on the next app
     // restart (surfaced in the setting description).
     if (this.settings.mvIcons) {
-      installMvIcons();
+      installMvIcons(this.settings.mvIconVariant);
       // Repaint what Obsidian has ALREADY drawn, right now — not at
       // layout-ready as an earlier version did.
       //
@@ -61,7 +61,7 @@ export default class PortalPlugin extends Plugin {
       // loads. It has to live in .obsidian/snippets, where it is applied with
       // the theme — this plugin's own stylesheet would arrive just as late as
       // the code above. Written from here so it needs no manual setup.
-      void installBootSnippet(this.app);
+      void installBootSnippet(this.app, this.settings.mvIconVariant);
     }
 
     this.registerView(
@@ -136,7 +136,7 @@ export default class PortalPlugin extends Plugin {
       // own `hi-*` glyph would otherwise take the name back — which is exactly
       // what happened with Exo's `hi-puzzle` and Horizon's `hi-calendar`.
       if (this.settings.mvIcons) {
-        installMvIcons();
+        installMvIcons(this.settings.mvIconVariant);
         // Synchronously, not on a timer: icons are held back until this runs,
         // so every millisecond of delay is a millisecond of missing chrome.
         refreshRenderedIcons();
@@ -165,6 +165,18 @@ export default class PortalPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+  }
+
+  /** Rewrites the boot snippet for the current weight.
+   *
+   *  Only half of the change can be immediate. The snippet covers the icons
+   *  Obsidian draws at launch and takes effect as soon as it is written; the
+   *  registry cannot follow, because `addIcon()` has no undo — those glyphs
+   *  stay as registered until the app restarts. Saying so in the setting
+   *  description is better than pretending otherwise. */
+  async applyIconVariant(): Promise<void> {
+    if (!this.settings.mvIcons) return;
+    await installBootSnippet(this.app, this.settings.mvIconVariant);
   }
 
   /** Deliberately initialised lazily rather than with a class-field

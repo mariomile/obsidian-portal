@@ -56,7 +56,7 @@ test('the icon sweep runs at load, not only at layout-ready', () => {
   // ones: the middle of the three states seen at launch.
   const main = readFileSync(new URL('../main.ts', import.meta.url), 'utf8');
   const onload = main.slice(main.indexOf('async onload'), main.indexOf('onLayoutReady'));
-  assert.match(onload, /installMvIcons\(\);[\s\S]{0,900}refreshRenderedIcons\(\)/);
+  assert.match(onload, /installMvIcons\([^)]*\);[\s\S]{0,900}refreshRenderedIcons\(\)/);
 });
 
 test('names kept out of the registry still reach the CSS snippet', () => {
@@ -70,6 +70,23 @@ test('names kept out of the registry still reach the CSS snippet', () => {
   assert.ok(!source.includes(`'menu':`), 'menu must not be in the registry');
 });
 
+test('every weight is selectable, and the boot CSS follows it', () => {
+  // The dropdown is only honest if both halves move: the snippet has to be
+  // rebuilt for the chosen weight, or the icons drawn at launch would stay on
+  // the old one while everything else changed.
+  assert.match(source, /export const MV_ICON_VARIANTS/);
+  assert.match(source, /export function buildBootCss\(variant\?: string\): string/);
+  // The boot CSS is built from the same tables as the registry, not shipped as
+  // a second copy — two sources would drift the moment the weight changed.
+  assert.ok(
+    !/BOOT_ICON_CSS\s*=/.test(source),
+    'the boot CSS must be generated, never a second stored copy',
+  );
+  const main = readFileSync(new URL('../main.ts', import.meta.url), 'utf8');
+  assert.match(main, /installMvIcons\(this\.settings\.mvIconVariant\)/);
+  assert.match(main, /async applyIconVariant\(\)/);
+});
+
 test('the snippet is written where the timing works', () => {
   // A plugin's own stylesheet is injected when the plugin loads — the same
   // late moment as the JS. Only .obsidian/snippets is applied with the theme,
@@ -77,7 +94,7 @@ test('the snippet is written where the timing works', () => {
   const installer = readFileSync(new URL('../icons/boot-snippet.ts', import.meta.url), 'utf8');
   assert.match(installer, /\.obsidian\/snippets/);
   // Updating the file must not silently re-enable one the user turned off.
-  assert.match(installer, /if \(!exists\) css\?\.setCssEnabledStatus/);
+  assert.match(installer, /if \(!exists\) manager\?\.setCssEnabledStatus/);
 });
 
 test('navigation arrows are deliberately left to Obsidian', () => {
@@ -172,12 +189,18 @@ test('the CSS guard matches what the module actually emits', () => {
   );
 });
 
-test('glyphs are filled shapes, not strokes', () => {
-  // The set reads as mass, not outline: filled shapes plus a faint second
-  // layer. No stroke geometry should be involved.
-  assert.match(source, /fill="currentColor"/);
-  assert.ok(!source.includes('stroke-width'), 'set must not carry stroke geometry');
-  assert.ok(!source.includes('fill="none"'), 'set must not carry fill="none"');
+test('the base weight is filled shapes, not strokes', () => {
+  // Scoped to the PATHS table on purpose. The module also ships the alternative
+  // weights for the settings dropdown, and some of those (linear, broken) are
+  // stroke-based by design — asserting over the whole file would fail on them
+  // and say nothing about the weight actually in use.
+  const base = source.slice(
+    source.indexOf('const PATHS'),
+    source.indexOf('const TRANSFORM'),
+  );
+  assert.match(base, /fill="currentColor"/);
+  assert.ok(!base.includes('stroke-width'), 'the base weight must not carry stroke geometry');
+  assert.ok(!base.includes('fill="none"'), 'the base weight must not carry fill="none"');
 });
 
 test('registers a broad set, not a token handful', () => {
@@ -206,7 +229,7 @@ test('covers every Lucide name observed in this vault’s live chrome', () => {
 });
 
 test('exposes the install entry point and its diagnostics', () => {
-  assert.match(source, /export function installMvIcons\(\): void/);
+  assert.match(source, /export function installMvIcons\(variant\?: string\): void/);
   assert.match(source, /export const MV_ICON_COUNT/);
   assert.match(source, /export function mvHasIcon/);
 });

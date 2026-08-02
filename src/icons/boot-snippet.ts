@@ -1,4 +1,4 @@
-import { BOOT_ICON_CSS, BOOT_ICON_CSS_VERSION } from '../kit/mv-icons-boot';
+import { buildBootCss, MV_ICON_SET } from '../kit/mv-icons';
 import type { App } from 'obsidian';
 
 /**
@@ -40,27 +40,35 @@ interface CustomCss {
  * Writes the snippet if missing or outdated, and enables it once.
  *
  * Deliberately does NOT re-enable a snippet the user has turned off: the file
- * is kept current, but whether it applies stays their decision. The version
+ * is kept current, but whether it applies stays their decision. The set+variant
  * marker in the CSS header is what makes "outdated" cheap to detect without
- * comparing 43 KB of text.
+ * comparing 40 KB of text — and it is why switching weight rewrites the file.
  */
-export async function installBootSnippet(app: App): Promise<'written' | 'current' | 'failed'> {
+export async function installBootSnippet(
+  app: App,
+  variant?: string,
+): Promise<'written' | 'current' | 'failed'> {
   try {
     const adapter = app.vault.adapter;
     const exists = await adapter.exists(SNIPPET_PATH);
     const current = exists ? await adapter.read(SNIPPET_PATH) : '';
+    const stamp = `${MV_ICON_SET}${variant ? `-${variant}` : ''}`;
 
-    if (!current.includes(BOOT_ICON_CSS_VERSION)) {
+    if (!current.includes(`[${stamp}]`)) {
+      const css = buildBootCss(variant).replace(
+        `[${MV_ICON_SET}]`,
+        `[${stamp}]`,
+      );
       if (!(await adapter.exists('.obsidian/snippets'))) {
         await adapter.mkdir('.obsidian/snippets');
       }
-      await adapter.write(SNIPPET_PATH, BOOT_ICON_CSS);
+      await adapter.write(SNIPPET_PATH, css);
 
-      const css = (app as App & { customCss?: CustomCss }).customCss;
-      css?.readSnippets?.();
+      const manager = (app as App & { customCss?: CustomCss }).customCss;
+      manager?.readSnippets?.();
       // Enable only on first install. If the file existed and the user had
       // disabled it, updating the contents must not switch it back on.
-      if (!exists) css?.setCssEnabledStatus?.(SNIPPET_NAME, true);
+      if (!exists) manager?.setCssEnabledStatus?.(SNIPPET_NAME, true);
       return 'written';
     }
     return 'current';
