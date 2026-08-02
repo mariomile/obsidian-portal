@@ -219,44 +219,13 @@
   stroke: none;
 }
 
-/* Startup flicker: Obsidian draws its chrome before this plugin loads, so those
-   icons are already on screen when we replace them — the swap reads as the app
-   changing appearance a beat after launch.
+/* Nessuna guardia anti-sfarfallio, deliberatamente. Una versione precedente
+   nascondeva le icone non ancora convertite per non far vedere la sostituzione:
+   ma un'icona che il set non copre non viene convertita MAI, quindi restava
+   invisibile per sempre — un pulsante vuoto al posto di un comando. Uno
+   sfarfallio all'avvio è un difetto estetico; un pulsante senza icona è un
+   guasto. Non si baratta il secondo per il primo. */
 
-   While the class is on <body>, icons still showing their pre-override glyph
-   are held back, so the first frame the user sees is already the final one.
-   Visibility, not display: the button keeps its size and nothing reflows.
-
-   The hiding is done by an ANIMATION, not a plain declaration, and that is the
-   important part. A declaration lasts exactly as long as the class does, so a
-   startup that never reaches `onLayoutReady` would leave buttons permanently
-   empty — a worse failure than the flicker it prevents. An animation expires on
-   its own: whatever happens in JS, the icon is back after 1.2s. The class is
-   still removed as soon as the sweeps finish; the animation is only the floor.
-
-   Each icon animates from when IT enters the DOM, so chrome built late — the
-   phone navbar, which Obsidian assembles after layout-ready — is covered for
-   its own first moments rather than for a window that already closed. */
-body.portal-icons-settling svg.svg-icon:not(:has(g[data-mv-icon])) {
-  animation: portal-icon-settle 1.2s steps(1, end);
-}
-
-@keyframes portal-icon-settle {
-  0%,
-  70% {
-    visibility: hidden;
-  }
-  100% {
-    visibility: visible;
-  }
-}
-
-/* An icon must never be left hidden because motion is switched off. */
-@media (prefers-reduced-motion: reduce) {
-  body.portal-icons-settling svg.svg-icon:not(:has(g[data-mv-icon])) {
-    animation: none;
-  }
-}
 
 /* Per-row leaf icon (folder / file / #tag), left of the label. Sized off
    Obsidian's own --icon-size so it matches native icons (nav buttons, chrome)

@@ -267,25 +267,23 @@ test('the primary UI symbols are bare, not enclosed in a filled shape', () => {
   }
 });
 
-test('the startup guard can never leave an icon hidden for good', () => {
-  // The guard hides not-yet-converted icons so the swap is not seen. That is
-  // only acceptable if it always ends: a startup that never reaches
-  // layout-ready would otherwise leave buttons permanently empty — a worse
-  // failure than the flicker it prevents.
+test('nothing hides an icon waiting for the icon set', () => {
+  // A previous version hid not-yet-converted icons so the swap would not be
+  // seen at launch. But an icon the set does not cover is never converted, so
+  // it stayed hidden for good: an empty button where a command should be. It
+  // shipped, and a screen recording is what finally showed it.
   //
-  // So the hiding is an animation, which expires on its own, rather than a
-  // plain declaration that lasts as long as the class.
+  // A flicker at launch is cosmetic; a control with no icon is broken. That
+  // trade is not worth making, so the guard is gone and must not return.
   const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
-  const guard = /body\.portal-icons-settling[^{]*\{([^}]*)\}/.exec(css)?.[1] ?? '';
-  assert.match(guard, /animation:/, 'the guard must expire on its own');
+  assert.ok(!/portal-icons-settling/.test(css), 'the startup guard must stay removed');
+  const main = readFileSync(new URL('../main.ts', import.meta.url), 'utf8');
+  assert.ok(!/ICONS_SETTLING/.test(main), 'no code may re-introduce the guard');
+  // More broadly: no rule may hide an icon on a condition that only JS clears.
   assert.ok(
-    !/visibility:\s*hidden/.test(guard),
-    'the guard must not hide via a declaration that outlives the JS',
+    !/svg\.svg-icon[^{]*\{[^}]*visibility:\s*hidden/.test(css),
+    'an icon must never depend on JS running to become visible',
   );
-  assert.match(css, /@keyframes portal-icon-settle/);
-  // And the keyframes must end visible, not hidden.
-  const frames = /@keyframes portal-icon-settle\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
-  assert.match(frames, /100%[^}]*\{[^}]*visibility:\s*visible/);
 });
 
 test('carries no Iconize dependency', () => {
