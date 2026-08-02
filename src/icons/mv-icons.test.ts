@@ -21,7 +21,6 @@ test('covers the core Lucide names Obsidian chrome draws', () => {
   const required = [
     'search',
     'plus',
-    'menu',
     'chevron-left',
     'chevron-right',
     'chevron-up',
@@ -47,6 +46,19 @@ test('covers the core Lucide names Obsidian chrome draws', () => {
   }
 });
 
+test('the icon sweep runs at load, not only at layout-ready', () => {
+  // Registering the set only affects icons drawn from that moment on. Whatever
+  // Obsidian painted before the plugin loaded keeps its old glyph until
+  // something rewrites it — so the sweep has to run immediately, in onload.
+  //
+  // Doing it only at layout-ready left a visible window where the theme and
+  // chrome were already the new ones and just the icons were still the old
+  // ones: the middle of the three states seen at launch.
+  const main = readFileSync(new URL('../main.ts', import.meta.url), 'utf8');
+  const onload = main.slice(main.indexOf('async onload'), main.indexOf('onLayoutReady'));
+  assert.match(onload, /installMvIcons\(\);[\s\S]{0,900}refreshRenderedIcons\(\)/);
+});
+
 test('navigation arrows are deliberately left to Obsidian', () => {
   // Not every icon gains from being replaced. Back/forward are navigation
   // affordances that should recede: Lucide's thin stroke says what it must,
@@ -56,6 +68,10 @@ test('navigation arrows are deliberately left to Obsidian', () => {
   for (const key of ['arrow-left', 'arrow-right']) {
     assert.ok(!source.includes(`'${key}':`), `${key} must stay Obsidian's own`);
   }
+  // `menu` is out for a different reason: the phone navbar's toolbar button
+  // never resolved correctly and that bar cannot be inspected from a desktop.
+  // A control that works beats a consistent icon.
+  assert.ok(!source.includes(`'menu':`), "menu must stay Obsidian's own");
 });
 
 test('covers the custom names Portal has hard-coded in its own call sites', () => {

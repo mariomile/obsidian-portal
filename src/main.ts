@@ -44,7 +44,19 @@ export default class PortalPlugin extends Plugin {
     // the whole suite changes set without any of them being modified.
     // No runtime undo exists, so disabling it takes effect on the next app
     // restart (surfaced in the setting description).
-    if (this.settings.mvIcons) installMvIcons();
+    if (this.settings.mvIcons) {
+      installMvIcons();
+      // Repaint what Obsidian has ALREADY drawn, right now — not at
+      // layout-ready as an earlier version did.
+      //
+      // This is what makes the launch read as two states instead of three.
+      // Registering the set only affects icons drawn from this moment on;
+      // everything Obsidian painted before the plugin loaded keeps its old
+      // glyph until something rewrites it. Waiting for layout-ready to do that
+      // left a visible window where theme and chrome were already the new ones
+      // and only the icons were still the old ones — the middle state.
+      refreshRenderedIcons();
+    }
 
     this.registerView(
       PORTAL_VIEW_TYPE,
