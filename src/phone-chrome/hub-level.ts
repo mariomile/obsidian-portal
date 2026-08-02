@@ -340,6 +340,13 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
           if (container) {
             const currentEl = leafEl(slotLeaves()[activeIndex]);
             if (currentEl) {
+              // A second swipe can claim this leaf while it's still mid-glide
+              // from the PREVIOUS one — that epilogue was superseded, so it
+              // skipped clearTransforms() and left `.portal-phone-settling`
+              // on it. Strip it before dragging: the finger is the animation
+              // now, and a leftover transition would ease our per-frame
+              // transform writes instead of tracking the touch exactly.
+              currentEl.removeClass('portal-phone-settling');
               currentEl.addClass('portal-phone-dragging');
               rubberBand = { el: currentEl, width: container.clientWidth || 1 };
               gestureInFlight = true;
@@ -356,6 +363,10 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
           // lives in the sidebar) — same rubber-band treatment as above.
           rubberBand = null;
           if (currentEl) {
+            // Same leftover-settle hazard as the no-destination branch above:
+            // a superseded epilogue never cleaned this class off, so strip it
+            // before the rubber-band drag starts driving the transform.
+            currentEl.removeClass('portal-phone-settling');
             currentEl.addClass('portal-phone-dragging');
             rubberBand = { el: currentEl, width: container.clientWidth || 1 };
             gestureInFlight = true;
@@ -374,6 +385,13 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
         // Promote both leaves to their own compositor layers for THIS drag
         // only — permanent will-change on two viewport-sized elements would
         // hold their textures in GPU memory for the whole session.
+        // Either leaf may still be wearing `.portal-phone-settling` from a
+        // superseded epilogue (it skips clearTransforms() by design — see
+        // runOwnedEpilogue) that never got to strip it. A dragged element
+        // must never be under a CSS transition, or it lags the finger while
+        // its undecorated counterpart tracks exactly, tearing the two apart.
+        currentEl.removeClass('portal-phone-settling');
+        neighbourEl.removeClass('portal-phone-settling');
         currentEl.addClass('portal-phone-dragging');
         neighbourEl.addClass('portal-phone-dragging');
         gesture = {
