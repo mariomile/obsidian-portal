@@ -1,4 +1,4 @@
-import { Platform } from 'obsidian';
+import { Notice, Platform } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import type PortalPlugin from '../main';
 import { executeCommand, isCommandRegistered, isViewTypeRegistered } from '../obsidian-internals';
@@ -309,6 +309,112 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
     container = null;
   };
 
+  /** Creates a new leaf for `viewType` in the workspace ROOT (never a
+   *  sidebar — see `TAB_CONTAINER`/`leafEl()`), then lets `sync()` pick it up
+   *  and bring the bar (and `activeIndex`) up to date. Shared by
+   *  `navbar.onSelect`'s lazy-creation branch (a tap on a not-yet-open view
+   *  slot) and `openHub()` (the `open-phone-hub` command/ribbon entry point,
+   *  used when no slot has a reachable leaf yet) — both need the exact same
+   *  in-flight guard, root placement, and error handling, and duplicating it
+   *  would let the two call sites silently drift out of sync on any future
+   *  fix. Never call this from `mount()` or from inside a gesture — creation
+   *  stays lazy, same as before this function was extracted. */
+  const createSlotLeaf = (viewType: string): void => {
+    // See `creating`'s doc comment: guards the async window between the
+    // trigger (tap or command) and setViewState's promise resolving.
+    if (creating.has(viewType)) return;
+    creating.add(viewType);
+    const doneCreating = (): void => {
+      creating.delete(viewType);
+    };
+    const logFailure = (err: unknown): void => {
+      // Logged, not silent: a view whose `onOpen` throws would otherwise
+      // leave a permanently dead pill (or a silently failed command) with
+      // zero diagnostics.
+      console.error(`Portal: failed to open "${viewType}" from the phone hub`, err);
+    };
+    try {
+      void plugin.app.workspace
+        .getLeaf('tab')
+        .setViewState({ type: viewType, active: true })
+        .then(() => {
+          // A failed creation (rejected promise, or the synchronous throw
+          // handled in the catch block below) never reaches this branch —
+          // the bar is left exactly as it was, not half committed. A
+          // successful one is picked up here rather than by reaching into
+          // the new leaf ourselves: `sync()` re-resolves `resolved`/
+          // `activeIndex` from scratch, which keeps this one code path (not
+          // two) responsible for bringing the bar to a consistent state.
+          if (disposed) return;
+          sync();
+        })
+        .catch(logFailure)
+        .finally(doneCreating);
+    } catch (err) {
+      // `getLeaf('tab')` itself can throw SYNCHRONOUSLY (e.g. "No tab group
+      // found.") before the promise chain above even exists, so that path
+      // would otherwise never reach `.catch()` — same non-committal
+      // handling and logging, just reached a different way. `.finally()`
+      // above never runs in this branch, so clean up `creating` here
+      // instead.
+      doneCreating();
+      logFailure(err);
+    }
+  };
+
+  /** Picks the hub-level target for `openHub()`: the first `enabled`,
+   *  view-backed slot in the configured order, preferring one whose leaf is
+   *  already reachable (an instant jump) over one that still needs
+   *  creating. A command-backed slot is never a valid target — running its
+   *  command opens a note, which by definition is not hub level — so it is
+   *  filtered out entirely rather than merely deprioritized. Recomputes
+   *  `resolveSlots` fresh instead of reading the module-level `resolved`:
+   *  this is exactly the case where the chrome may never have mounted, so
+   *  `resolved` can still be its initial `[]`. */
+  const pickHubTarget = (): ResolvedSlot | null => {
+    const currentResolved = resolveSlots(
+      plugin.settings.phoneChromeSlots,
+      (type) => isViewTypeRegistered(plugin.app, type),
+      (id) => isCommandRegistered(plugin.app, id),
+      hasReachableLeaf,
+    );
+    const viewBacked = currentResolved.filter((r) => r.enabled && r.slot.viewType);
+    return viewBacked.find((r) => r.pageable) ?? viewBacked[0] ?? null;
+  };
+
+  /** Explicit entry point to hub level — the `open-phone-hub` command and its
+   *  ribbon icon both call this. Nothing else ever gets the user to hub
+   *  level: the chrome only mounts once the active leaf matches a pageable
+   *  slot (`sync()`'s `indexOfActiveLeaf`), Obsidian opens on a note, and a
+   *  slot's own leaf is normally created by tapping a pill that does not
+   *  exist yet until the chrome is already mounted. This closes that loop by
+   *  activating (or, lazily, creating) a hub-level leaf directly; `sync()`
+   *  (already wired to `active-leaf-change`) takes it from there and mounts
+   *  the chrome — this function never touches the navbar/container itself. */
+  const openHub = (): void => {
+    if (!plugin.settings.phoneChrome) return;
+    const target = pickHubTarget();
+    const viewType = target?.slot.viewType;
+    if (!target || !viewType) {
+      new Notice('Portal: no phone hub view is available to open.');
+      return;
+    }
+    if (target.pageable) {
+      const leaf = reachableLeafOfType(
+        viewType,
+        container ?? document.querySelector<HTMLElement>(TAB_CONTAINER),
+      );
+      if (leaf) {
+        plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
+        return;
+      }
+    }
+    // No reachable leaf (`pickHubTarget` fell through to a not-yet-open
+    // slot, or it vanished between resolution and lookup) — same lazy
+    // creation path a pill tap on an unopened slot uses.
+    createSlotLeaf(viewType);
+  };
+
   const mount = (): void => {
     const found = document.querySelector<HTMLElement>(TAB_CONTAINER);
     // Fail-safe: an Obsidian update that renames this structure means the
@@ -365,46 +471,7 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
         }
         const viewType = entry.slot.viewType;
         if (!viewType) return;
-        // See `creating`'s doc comment: guards the async window between
-        // this tap and setViewState's promise resolving.
-        if (creating.has(viewType)) return;
-        creating.add(viewType);
-        const doneCreating = (): void => {
-          creating.delete(viewType);
-        };
-        const logFailure = (err: unknown): void => {
-          // Logged, not silent: a view whose `onOpen` throws would
-          // otherwise leave a permanently dead pill with zero diagnostics.
-          console.error(`Portal: failed to open "${viewType}" from the phone hub`, err);
-        };
-        try {
-          void plugin.app.workspace
-            .getLeaf('tab')
-            .setViewState({ type: viewType, active: true })
-            .then(() => {
-              // A failed creation (rejected promise, or the synchronous
-              // throw handled in the catch block below) never reaches this
-              // branch — the bar is left exactly as it was, not half
-              // committed. A successful one is picked up here rather than
-              // by reaching into the new leaf ourselves: `sync()`
-              // re-resolves `resolved`/`activeIndex` from scratch, which
-              // keeps this one code path (not two) responsible for
-              // bringing the bar to a consistent state.
-              if (disposed) return;
-              sync();
-            })
-            .catch(logFailure)
-            .finally(doneCreating);
-        } catch (err) {
-          // `getLeaf('tab')` itself can throw SYNCHRONOUSLY (e.g. "No tab
-          // group found.") before the promise chain above even exists, so
-          // that path would otherwise never reach `.catch()` — same
-          // non-committal handling and logging, just reached a different
-          // way. `.finally()` above never runs in this branch, so clean up
-          // `creating` here instead.
-          doneCreating();
-          logFailure(err);
-        }
+        createSlotLeaf(viewType);
         return;
       }
       const leaf = slotLeaves()[index];
@@ -691,6 +758,19 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
     disposed = true;
     unmount();
   });
+
+  // Explicit entry point to hub level (see `openHub`'s doc comment for why
+  // one is needed at all). `settings.phoneChrome` is checked INSIDE
+  // `openHub`, not here, so toggling the setting stays live without needing
+  // to re-register either affordance. `layout-grid` is one of the Lucide
+  // names `src/kit/mv-icons.ts` already re-skins for the whole app — reused
+  // here rather than inventing a new glyph.
+  plugin.addCommand({
+    id: 'open-phone-hub',
+    name: 'Open phone hub',
+    callback: () => openHub(),
+  });
+  plugin.addRibbonIcon('layout-grid', 'Open phone hub', () => openHub());
 
   // Exposed so the settings tab's `phoneChrome` toggle can apply live: the
   // spec promises that, and without an explicit hook it would only take
