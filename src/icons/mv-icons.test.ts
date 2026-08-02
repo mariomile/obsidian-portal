@@ -262,6 +262,20 @@ test('third-party artwork is attributed, in the app as well as the repo', () => 
   assert.match(apache, /Apache License/);
 });
 
+test('the day stepper gets solid triangles, distinct from chevrons', () => {
+  // `caret-*` and `chevron-*` are deliberately different glyphs for different
+  // jobs: a solid triangle steps to the previous day, a chevron expands a
+  // section. They were the same name once, so restyling the stepper would have
+  // restyled every collapsible header in the app.
+  const caret = /'caret-left': '([^']+)'/.exec(source)?.[1];
+  const chevron = /'chevron-left': '([^']+)'/.exec(source)?.[1];
+  assert.ok(caret && chevron, 'both names must be registered');
+  assert.notEqual(caret, chevron, 'stepper and expander must not share a glyph');
+  // The stepper is a solid mark: one shape, no faint duotone layer.
+  assert.equal((caret?.match(/<(?:path|circle|rect)\b/g) ?? []).length, 1);
+  assert.ok(!/opacity=/.test(caret ?? ''), 'the stepper must read as solid');
+});
+
 test('the primary UI symbols are bare, not enclosed in a filled shape', () => {
   // Regression guard for a real defect. Solar has no bare `plus`/`x`/`check`,
   // only circled ones, and in duotone the circle renders as a filled disc — the
