@@ -219,6 +219,19 @@
   stroke: none;
 }
 
+/* Startup flicker: Obsidian draws its chrome before this plugin loads, so those
+   icons are already on screen when we replace them — the swap reads as the app
+   changing appearance a beat after launch.
+
+   While the class is on <body>, icons still showing their pre-override glyph
+   are held invisible, so the first frame the user sees is already the final
+   one. Visibility, not display: the button keeps its size and nothing reflows.
+   The class is removed as soon as the first sweep lands (and by a 2s failsafe
+   if startup tears), so this is never a lasting state. */
+body.portal-icons-settling svg.svg-icon:not(:has(g[data-mv-icon])) {
+  visibility: hidden;
+}
+
 /* Per-row leaf icon (folder / file / #tag), left of the label. Sized off
    Obsidian's own --icon-size so it matches native icons (nav buttons, chrome)
    1:1 instead of an arbitrary close-but-off value. */

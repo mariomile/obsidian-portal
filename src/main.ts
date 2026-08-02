@@ -19,6 +19,11 @@ import {
 const HIDDEN_LEAF_CLASS = 'portal-hidden-leaf';
 const FILE_EXPLORER_TYPE = 'file-explorer';
 
+/** On `<body>` between registering the icon set and the first sweep landing:
+ *  hides icons still showing their pre-override glyph, so the swap is not
+ *  visible as a repaint. Removed as soon as the sweep has run. */
+const ICONS_SETTLING_CLASS = 'portal-icons-settling';
+
 /**
  * Portal — Craft-style unified navigator.
  *
@@ -43,7 +48,21 @@ export default class PortalPlugin extends Plugin {
     // the whole suite changes set without any of them being modified.
     // No runtime undo exists, so disabling it takes effect on the next app
     // restart (surfaced in the setting description).
-    if (this.settings.mvIcons) installMvIcons();
+    if (this.settings.mvIcons) {
+      installMvIcons();
+      // Obsidian draws its chrome before this plugin loads, so those icons
+      // already exist by the time we can replace them — the swap shows up as a
+      // repaint a beat after launch. Hiding the not-yet-converted ones until
+      // the first sweep lands trades that flicker for a brief gap, which reads
+      // as less broken: the eye catches motion, not absence.
+      document.body.addClass(ICONS_SETTLING_CLASS);
+      // Failsafe. Hiding icons is only acceptable because it ends: if
+      // `onLayoutReady` never fires — a torn startup, a workspace that fails to
+      // load — the chrome must come back rather than stay blank forever.
+      this.iconsSettlingFailsafe = window.setTimeout(() => {
+        document.body.removeClass(ICONS_SETTLING_CLASS);
+      }, 2000);
+    }
 
     this.registerView(
       PORTAL_VIEW_TYPE,
@@ -101,9 +120,15 @@ export default class PortalPlugin extends Plugin {
       // last-write-wins, so a plugin loading after this one and registering its
       // own `hi-*` glyph would otherwise take the name back — which is exactly
       // what happened with Exo's `hi-puzzle` and Horizon's `hi-calendar`.
-      if (this.settings.mvIcons) installMvIcons();
-      // Chrome built before this plugin loaded still holds the old glyphs;
-      // addIcon() never rewrites the DOM, so they have to be swapped by hand.
+      if (this.settings.mvIcons) {
+        installMvIcons();
+        // Synchronously, not on a timer: the chrome is hidden until this runs,
+        // so every millisecond of delay is a millisecond of missing icons.
+        refreshRenderedIcons();
+        document.body.removeClass(ICONS_SETTLING_CLASS);
+        if (this.iconsSettlingFailsafe) window.clearTimeout(this.iconsSettlingFailsafe);
+      }
+      // A later pass still catches whatever Obsidian builds after this point.
       this.scheduleIconRefresh();
     });
 
@@ -119,6 +144,9 @@ export default class PortalPlugin extends Plugin {
 
   onunload(): void {
     for (const id of this.iconRefreshTimers ?? []) window.clearTimeout(id);
+    // Never leave icons hidden if we unload mid-startup.
+    if (this.iconsSettlingFailsafe) window.clearTimeout(this.iconsSettlingFailsafe);
+    document.body.removeClass(ICONS_SETTLING_CLASS);
     // Always restore the native explorer so disabling Portal never leaves it
     // permanently hidden.
     this.setExplorerHidden(false);
@@ -136,6 +164,9 @@ export default class PortalPlugin extends Plugin {
    *  and the cause was invisible. `??=` removes the dependency on when field
    *  initializers are applied by the bundler. */
   private iconRefreshTimers?: number[];
+
+  /** Backstop that un-hides the chrome if startup never completes. */
+  private iconsSettlingFailsafe?: number;
 
   /** Sweep stale Lucide glyphs out of the DOM, coalesced.
    *
