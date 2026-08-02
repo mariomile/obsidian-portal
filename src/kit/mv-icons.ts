@@ -4,7 +4,7 @@ import { addIcon, setIcon } from 'obsidian';
 // Rigenera con: marioverse-kit/sync.sh
 //
 // Set: Material Symbols Rounded (Apache-2.0), variante `fill`.
-// 447 nomi Lucide → 376 glifi
+// 452 nomi Lucide → 378 glifi
 // distinti (gli alias storici — alert-triangle/triangle-alert, ellipsis/
 // more-horizontal, loader/loader-2 — puntano allo stesso glifo, così il naming
 // drift accumulato nella suite si risolve qui invece che in 16 repo).
@@ -226,10 +226,15 @@ const PATHS: Record<string, string> = {
   'hexagon': 'M307-120q-16 0-30-8t-22-22L81-450q-8-14-8-30t8-30l174-300q8-14 22-22t30-8h346q16 0 30 8t22 22l174 300q8 14 8 30t-8 30L705-150q-8 14-22 22t-30 8H307Z',
   'hi-calendar': 'M180-80q-24 0-42-18t-18-42v-620q0-24 18-42t42-18h65v-28q0-13.6 9-22.8 9-9.2 23.02-9.2t23.5 9.2Q310-861.6 310-848v28h340v-28q0-13.6 9-22.8 9-9.2 23.02-9.2t23.5 9.2Q715-861.6 715-848v28h65q24 0 42 18t18 42v620q0 24-18 42t-42 18H180Zm0-60h600v-430H180v430Zm300-260q-17 0-28.5-11.5T440-440q0-17 11.5-28.5T480-480q17 0 28.5 11.5T520-440q0 17-11.5 28.5T480-400Zm-188.5-11.5Q280-423 280-440t11.5-28.5Q303-480 320-480t28.5 11.5Q360-457 360-440t-11.5 28.5Q337-400 320-400t-28.5-11.5ZM640-400q-17 0-28.5-11.5T600-440q0-17 11.5-28.5T640-480q17 0 28.5 11.5T680-440q0 17-11.5 28.5T640-400ZM480-240q-17 0-28.5-11.5T440-280q0-17 11.5-28.5T480-320q17 0 28.5 11.5T520-280q0 17-11.5 28.5T480-240Zm-188.5-11.5Q280-263 280-280t11.5-28.5Q303-320 320-320t28.5 11.5Q360-297 360-280t-11.5 28.5Q337-240 320-240t-28.5-11.5ZM640-240q-17 0-28.5-11.5T600-280q0-17 11.5-28.5T640-320q17 0 28.5 11.5T680-280q0 17-11.5 28.5T640-240Z',
   'hi-file-01': 'M349-250h262q13 0 21.5-8.5T641-280q0-13-8.5-21.5T611-310H349q-13 0-21.5 8.5T319-280q0 13 8.5 21.5T349-250Zm0-170h262q13 0 21.5-8.5T641-450q0-13-8.5-21.5T611-480H349q-13 0-21.5 8.5T319-450q0 13 8.5 21.5T349-420ZM220-80q-24 0-42-18t-18-42v-680q0-24 18-42t42-18h336q12 0 23.5 5t19.5 13l183 183q8 8 13 19.5t5 23.5v496q0 24-18 42t-42 18H220Zm331-584q0 13 8.5 21.5T581-634h159L551-820v156Z',
+  'hi-layout-grid': 'M180-510q-24.75 0-42.37-17.63Q120-545.25 120-570v-210q0-24.75 17.63-42.38Q155.25-840 180-840h210q24.75 0 42.38 17.62Q450-804.75 450-780v210q0 24.75-17.62 42.37Q414.75-510 390-510H180Zm0 390q-24.75 0-42.37-17.63Q120-155.25 120-180v-210q0-24.75 17.63-42.38Q155.25-450 180-450h210q24.75 0 42.38 17.62Q450-414.75 450-390v210q0 24.75-17.62 42.37Q414.75-120 390-120H180Zm390-390q-24.75 0-42.37-17.63Q510-545.25 510-570v-210q0-24.75 17.63-42.38Q545.25-840 570-840h210q24.75 0 42.38 17.62Q840-804.75 840-780v210q0 24.75-17.62 42.37Q804.75-510 780-510H570Zm0 390q-24.75 0-42.37-17.63Q510-155.25 510-180v-210q0-24.75 17.63-42.38Q545.25-450 570-450h210q24.75 0 42.38 17.62Q840-414.75 840-390v210q0 24.75-17.62 42.37Q804.75-120 780-120H570Z',
   'hi-note-add': 'M220-80q-24 0-42-18t-18-42v-680q0-24 18-42t42-18h336q12.44 0 23.72 5T599-862l183 183q8 8 13 19.28 5 11.28 5 23.72v496q0 24-18 42t-42 18H220Zm331-584q0 12.75 8.63 21.37Q568.25-634 581-634h159L551-820v156ZM450-363v99q0 12.75 8.68 21.37 8.67 8.63 21.5 8.63 12.82 0 21.32-8.63 8.5-8.62 8.5-21.37v-99h100q12.75 0 21.38-8.68 8.62-8.67 8.62-21.5 0-12.82-8.62-21.32-8.63-8.5-21.38-8.5H510v-100q0-12.75-8.68-21.38-8.67-8.62-21.5-8.62-12.82 0-21.32 8.62-8.5 8.63-8.5 21.38v100H350q-12.75 0-21.37 8.68-8.63 8.67-8.63 21.5 0 12.82 8.63 21.32 8.62 8.5 21.37 8.5h100Z',
   'hi-panel-left': 'M527-580v200q0 9.92 9.5 13.46Q546-363 553-370l89-89q9-9 9-21t-9-21l-89-89q-7-7-16.5-3.46T527-580ZM180-120q-24.75 0-42.37-17.63Q120-155.25 120-180v-600q0-24.75 17.63-42.38Q155.25-840 180-840h600q24.75 0 42.38 17.62Q840-804.75 840-780v600q0 24.75-17.62 42.37Q804.75-120 780-120H180Zm207-60h393v-600H387v600Z',
   'hi-puzzle': 'M191-120q-29 0-50-21t-21-51v-121q0-8 5-13t13-7q45-9 75.5-43t30.5-82q0-48-30-82.5T139-583q-8-2-13-7t-5-13v-126q0-30 20.5-50.5T192-800h136q7-49 44-82t87-33q49 0 86 33t45 82h139q30 0 50.5 20.5T800-729v147q38 18 60.5 49.5T883-458q0 43-22.5 75T800-334v142q0 30-20.5 51T729-120H191Z',
+  'hi-search': 'M378-329q-108.16 0-183.08-75Q120-479 120-585t75-181q75-75 181.5-75t181 75Q632-691 632-584.85 632-542 618-502q-14 40-42 75l242 240q9 8.56 9 21.78T818-143q-9 9-22.22 9-13.22 0-21.78-9L533-384q-30 26-69.96 40.5Q423.08-329 378-329Zm-1-60q81.25 0 138.13-57.5Q572-504 572-585t-56.87-138.5Q458.25-781 377-781q-82.08 0-139.54 57.5Q180-666 180-585t57.46 138.5Q294.92-389 377-389Z',
+  'hi-square-stack': 'M465.5-419.5Q459-421 452-425L90-619q-8-5-11.5-11.5T75-645q0-8 3.5-14.5T90-671l362-194q7-4 13.5-5.5T480-872q8 0 14.5 1.5T508-865l362 194q8 5 12 11.5t4 14.5q0 8-4 14.5T870-619L508-425q-7 4-13.5 5.5T480-418q-8 0-14.5-1.5ZM480-313l339-181q2-1 14-3 12 0 21 8.5t9 21.5q0 8-4 14.5T847-441L508-260q-7 4-13.5 5.5T480-253q-8 0-14.5-1.5T452-260L114-441q-8-5-12-11.5T98-467q0-13 9-21.5t21-8.5q4 0 7.5 1t6.5 3l338 180Zm0 165 339-181q2-1 14-3 12 0 21 8.5t9 21.5q0 8-4 14.5T847-276L508-95q-7 4-13.5 5.5T480-88q-8 0-14.5-1.5T452-95L114-276q-8-5-12-11.5T98-302q0-13 9-21.5t21-8.5q4 0 7.5 1t6.5 3l338 180Z',
+  'hi-tags': 'M140-160q-24.75 0-42.37-17.63Q80-195.25 80-220v-520q0-24.75 17.63-42.38Q115.25-800 140-800h471q14.25 0 27 6.37 12.75 6.38 21 17.63l195 260q12 15.68 12 35.84Q866-460 854-444L660-184q-8.25 11.25-21 17.62-12.75 6.38-27 6.38H140Z',
   'hi-task': 'M480-80q-85 0-158-30.5T195-195q-54-54-84.5-127T80-480q0-84 30.5-157T195-764q54-54 127-85t158-31q60 0 117 17.5T704-811q11 7 13.5 19t-5.5 22q-8 10-20 11t-23-6q-42-27-90-41t-99-14q-145 0-242.5 97.5T140-480q0 145 97.5 242.5T480-140q145 0 242.5-97.5T820-480q0-19-1.5-37t-5.5-35q-2-13 4-24t18-13q13-3 24 4.5t13 20.5q4 20 6 41t2 43q0 85-31 158t-85 127q-54 54-127 84.5T480-80Zm-59-309 392-392q9-9 22-9t23 9q10 10 10 23t-10 23L442-319q-9 9-21 9t-21-9L278-442q-9-9-8.5-22.5T279-487q9-9 22.5-9t22.5 9l97 98Z',
+  'hi-workflow': 'M604-180v-65h-94q-24.75 0-42.37-17.63Q450-280.25 450-305v-350h-93v70q0 24.75-17.62 42.37Q321.75-525 297-525H140q-24.75 0-42.37-17.63Q80-560.25 80-585v-195q0-24.75 17.63-42.38Q115.25-840 140-840h157q24.75 0 42.38 17.62Q357-804.75 357-780v65h247v-65q0-24.75 17.63-42.38Q639.25-840 664-840h156q24.75 0 42.38 17.62Q880-804.75 880-780v195q0 24.75-17.62 42.37Q844.75-525 820-525H664q-24.75 0-42.37-17.63Q604-560.25 604-585v-70h-94v350h94v-70q0-24.75 17.63-42.38Q639.25-435 664-435h156q24.75 0 42.38 17.62Q880-399.75 880-375v195q0 24.75-17.62 42.37Q844.75-120 820-120H664q-24.75 0-42.37-17.63Q604-155.25 604-180Z',
   'highlighter': 'm396-564 200 200-212 212q-19 19-52.5 19T279-152l-11-11-25 25q-8 8-19.5 13t-23.5 5h-94q-10 0-13.5-9.5T96-146l94-94-4-4q-22-22-21.5-55.5T187-355l209-209Zm43-43 216-216q17-17 43-17t43 17l112 112q17 17 16.5 45.5T852-620L639-407 439-607Z',
   'history': 'M477-120q-142 0-243.5-95.5T121-451q-1-12 7.5-21t21.5-9q12 0 20.5 8.5T181-451q11 115 95 193t201 78q127 0 215-89t88-216q0-124-89-209.5T477-780q-68 0-127.5 31T246-667h75q13 0 21.5 8.5T351-637q0 13-8.5 21.5T321-607H172q-13 0-21.5-8.5T142-637v-148q0-13 8.5-21.5T172-815q13 0 21.5 8.5T202-785v76q52-61 123.5-96T477-840q75 0 141 28t115.5 76.5Q783-687 811.5-622T840-482q0 75-28.5 141t-78 115Q684-177 618-148.5T477-120Zm34-374 115 113q9 9 9 21.5t-9 21.5q-9 9-21 9t-21-9L460-460q-5-5-7-10.5t-2-11.5v-171q0-13 8.5-21.5T481-683q13 0 21.5 8.5T511-653v159Z',
   'home': 'M160-180v-390q0-14.25 6.38-27 6.37-12.75 17.62-21l260-195q15.68-12 35.84-12Q500-825 516-813l260 195q11.25 8.25 17.63 21 6.37 12.75 6.37 27v390q0 24.75-17.62 42.37Q764.75-120 740-120H590q-12.75 0-21.37-8.63Q560-137.25 560-150v-220q0-12.75-8.62-21.38Q542.75-400 530-400H430q-12.75 0-21.37 8.62Q400-382.75 400-370v220q0 12.75-8.62 21.37Q382.75-120 370-120H220q-24.75 0-42.37-17.63Q160-155.25 160-180Z',
@@ -486,7 +491,7 @@ function body(d: string): string {
 }
 
 /** Quanti nomi Lucide questo modulo sovrascrive. */
-export const MV_ICON_COUNT = 447;
+export const MV_ICON_COUNT = 452;
 
 /** Nomi Lucide coperti dall'override, per test e diagnostica. */
 export const MV_ICON_NAMES: readonly string[] = Object.keys(PATHS);
@@ -510,9 +515,16 @@ export function installMvIcons(): void {
  *  tutta la sessione. Riguarda il chrome costruito all'avvio — ribbon, tab bar,
  *  view header — e le icone dei plugin che si caricano prima di questo.
  *
- *  Obsidian marca le sue icone Lucide con la classe `lucide-<nome>`, che è il
- *  modo di riconoscerle: le icone già passate dal registry non ce l'hanno, e
- *  vengono saltate (quindi la funzione è idempotente e non ricade su se stessa).
+ *  Riconoscere quali ridipingere: Obsidian scrive il nome dell'icona come
+ *  classe sull'SVG — `lucide-archive` per le sue, il nome nudo (`hi-calendar`)
+ *  per quelle registrate via addIcon. Un glifo già nostro porta
+ *  `data-mv-icon`, quindi viene saltato: la funzione è idempotente e non
+ *  ricade su se stessa.
+ *
+ *  Guardare solo le `lucide-*` non basta. Le icone che gli altri plugin
+ *  registrano con un nome proprio vengono disegnate quando costruiscono la
+ *  ribbon, e se quel plugin carica prima di questo il bottone resta al glifo
+ *  vecchio per sempre — invisibile a un filtro sulle Lucide.
  *
  *  L'SVG viene sostituito, non ridisegnato sul parent: `setIcon(parent, …)`
  *  svuoterebbe il contenitore, e molti di questi parent contengono anche la
@@ -521,18 +533,23 @@ export function installMvIcons(): void {
  *  @returns quante icone sono state sostituite. */
 export function refreshRenderedIcons(root: ParentNode = document): number {
   if (typeof (root as Element).querySelectorAll !== 'function') return 0;
-  const stale = root.querySelectorAll<SVGElement>('svg.svg-icon[class*="lucide-"]');
-  if (!stale.length) return 0;
+  const candidates = root.querySelectorAll<SVGElement>('svg.svg-icon');
+  if (!candidates.length) return 0;
 
   const scratch = document.createElement('div');
   let replaced = 0;
-  for (const svg of Array.from(stale)) {
-    const name = /(?:^|\s)lucide-([a-z0-9-]+)/.exec(svg.getAttribute('class') ?? '')?.[1];
-    if (!name || !(name in PATHS)) continue;
+  for (const svg of Array.from(candidates)) {
+    if (svg.querySelector('g[data-mv-icon]')) continue; // già nostro
+    // La classe è `svg-icon <nome>`, con `lucide-` davanti per le native.
+    const name = (svg.getAttribute('class') ?? '')
+      .split(/\s+/)
+      .map((c) => (c.startsWith('lucide-') ? c.slice('lucide-'.length) : c))
+      .find((c) => c !== 'svg-icon' && c in PATHS);
+    if (!name) continue;
     scratch.empty();
     setIcon(scratch, name);
     const fresh = scratch.firstElementChild;
-    if (!fresh) continue;
+    if (!fresh || !fresh.querySelector('g[data-mv-icon]')) continue;
     svg.replaceWith(fresh);
     replaced += 1;
   }

@@ -164,10 +164,16 @@ test('can repaint icons already in the DOM', () => {
   // install stays on the old glyph for the whole session. Without this the
   // chrome built at startup never changes, no matter how many restarts.
   assert.match(source, /export function refreshRenderedIcons/);
-  // It must key off Obsidian's `lucide-<name>` marker class...
-  assert.match(source, /lucide-\(\[a-z0-9-\]\+\)/);
-  // ...and swap the <svg> itself, never redraw onto the parent: many of those
-  // parents also hold the button's label, which setIcon() would wipe.
+  // It must handle BOTH naming shapes Obsidian writes onto the class: the
+  // `lucide-` prefix for its own icons, and the bare name for anything
+  // registered through addIcon. Filtering only on `lucide-` misses the ribbon
+  // buttons other plugins draw with their own `hi-*` names.
+  assert.match(source, /startsWith\('lucide-'\)/);
+  assert.match(source, /c in PATHS/, 'must match bare registered names too');
+  // Already-converted glyphs are skipped, so the sweep is idempotent.
+  assert.match(source, /querySelector\('g\[data-mv-icon\]'\)\) continue/);
+  // ...and it swaps the <svg> itself, never redraws onto the parent: many of
+  // those parents also hold the button's label, which setIcon() would wipe.
   assert.match(source, /\.replaceWith\(fresh\)/);
   assert.ok(
     !/setIcon\(\s*svg\.parentElement/.test(source),

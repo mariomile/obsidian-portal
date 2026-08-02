@@ -97,7 +97,12 @@ export default class PortalPlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => {
       void this.activateView(false);
       this.applyExplorerVisibility();
-      // Chrome built before this plugin loaded still holds Lucide glyphs;
+      // Register again now that every plugin has loaded. The icon registry is
+      // last-write-wins, so a plugin loading after this one and registering its
+      // own `hi-*` glyph would otherwise take the name back — which is exactly
+      // what happened with Exo's `hi-puzzle` and Horizon's `hi-calendar`.
+      if (this.settings.mvIcons) installMvIcons();
+      // Chrome built before this plugin loaded still holds the old glyphs;
       // addIcon() never rewrites the DOM, so they have to be swapped by hand.
       this.scheduleIconRefresh();
     });
