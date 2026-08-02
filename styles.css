@@ -572,7 +572,12 @@ body.is-phone .portal-section-header {
      bar gets shrunk to nothing by the content container's flex: 1. */
   flex: 0 0 auto;
   height: var(--portal-phone-icon-size);
-  margin: var(--size-4-2, 8px) var(--size-4-3, 12px);
+  /* The bar is inserted before the tab container, which sits ABOVE the view
+     header — i.e. in the region the status bar and notch cover. Obsidian's
+     own chrome pads for that inset; ours has to as well, or the pills render
+     behind the clock (observed on device). */
+  margin: calc(var(--safe-area-inset-top, 0px) + var(--size-4-2, 8px))
+    var(--size-4-3, 12px) var(--size-4-2, 8px);
 }
 
 .portal-phone-slot {
