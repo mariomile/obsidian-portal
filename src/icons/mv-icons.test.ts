@@ -299,6 +299,22 @@ test('third-party artwork is attributed, in the app as well as the repo', () => 
   assert.match(apache, /Apache License/);
 });
 
+test('chevrons use a single-colour variant, not the duotone', () => {
+  // Chevrons are small and repeated — the calendar header, every collapsible
+  // panel. The duotone lays two shapes on top of each other and at 14px they
+  // smear into one another. The outline variant is the same drawing in one
+  // colour, so it stays legible at the size it actually lives at.
+  for (const name of ['chevron-left', 'chevron-right', 'chevron-up', 'chevron-down']) {
+    const body = new RegExp(`'${name}': '([^']+)'`).exec(source)?.[1] ?? '';
+    assert.ok(body, `missing chevron: ${name}`);
+    assert.ok(!/opacity=/.test(body), `${name} must not carry a duotone layer`);
+  }
+  // The rest of the set stays duotone: this is a targeted exception, not a
+  // change of family.
+  const folder = /'folder': '([^']+)'/.exec(source)?.[1] ?? '';
+  assert.match(folder, /opacity=/, 'the set at large must remain duotone');
+});
+
 test('the day stepper gets solid triangles, distinct from chevrons', () => {
   // `caret-*` and `chevron-*` are deliberately different glyphs for different
   // jobs: a solid triangle steps to the previous day, a chevron expands a
