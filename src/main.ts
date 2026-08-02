@@ -57,12 +57,12 @@ export default class PortalPlugin extends Plugin {
       // the first sweep lands trades that flicker for a brief gap, which reads
       // as less broken: the eye catches motion, not absence.
       document.body.addClass(ICONS_SETTLING_CLASS);
-      // Failsafe. Hiding icons is only acceptable because it ends: if
-      // `onLayoutReady` never fires — a torn startup, a workspace that fails to
-      // load — the chrome must come back rather than stay blank forever.
+      // Lifted once startup has settled, comfortably after the last sweep. The
+      // CSS animation expires on its own well before this, so the delay costs
+      // nothing: it only keeps the guard available for chrome built late.
       this.iconsSettlingFailsafe = window.setTimeout(() => {
         document.body.removeClass(ICONS_SETTLING_CLASS);
-      }, 2000);
+      }, 3000);
     }
 
     this.registerView(
@@ -138,13 +138,14 @@ export default class PortalPlugin extends Plugin {
       // what happened with Exo's `hi-puzzle` and Horizon's `hi-calendar`.
       if (this.settings.mvIcons) {
         installMvIcons();
-        // Synchronously, not on a timer: the chrome is hidden until this runs,
-        // so every millisecond of delay is a millisecond of missing icons.
+        // Synchronously, not on a timer: icons are held back until this runs,
+        // so every millisecond of delay is a millisecond of missing chrome.
         refreshRenderedIcons();
-        document.body.removeClass(ICONS_SETTLING_CLASS);
-        if (this.iconsSettlingFailsafe) window.clearTimeout(this.iconsSettlingFailsafe);
       }
-      // A later pass still catches whatever Obsidian builds after this point.
+      // The settling class deliberately stays on past this point. Obsidian
+      // assembles the phone navbar AFTER layout-ready, so dropping the guard
+      // here — as an earlier version did — left exactly those icons visible in
+      // their old form until the next sweep. The failsafe below lifts it.
       this.scheduleIconRefresh();
     });
 

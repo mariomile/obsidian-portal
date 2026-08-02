@@ -267,6 +267,27 @@ test('the primary UI symbols are bare, not enclosed in a filled shape', () => {
   }
 });
 
+test('the startup guard can never leave an icon hidden for good', () => {
+  // The guard hides not-yet-converted icons so the swap is not seen. That is
+  // only acceptable if it always ends: a startup that never reaches
+  // layout-ready would otherwise leave buttons permanently empty — a worse
+  // failure than the flicker it prevents.
+  //
+  // So the hiding is an animation, which expires on its own, rather than a
+  // plain declaration that lasts as long as the class.
+  const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+  const guard = /body\.portal-icons-settling[^{]*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+  assert.match(guard, /animation:/, 'the guard must expire on its own');
+  assert.ok(
+    !/visibility:\s*hidden/.test(guard),
+    'the guard must not hide via a declaration that outlives the JS',
+  );
+  assert.match(css, /@keyframes portal-icon-settle/);
+  // And the keyframes must end visible, not hidden.
+  const frames = /@keyframes portal-icon-settle\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
+  assert.match(frames, /100%[^}]*\{[^}]*visibility:\s*visible/);
+});
+
 test('carries no Iconize dependency', () => {
   // The point of the migration: no runtime lookup against another plugin's
   // async, filesystem-backed icon cache.
