@@ -59,6 +59,27 @@ test('the icon sweep runs at load, not only at layout-ready', () => {
   assert.match(onload, /installMvIcons\(\);[\s\S]{0,900}refreshRenderedIcons\(\)/);
 });
 
+test('names kept out of the registry still reach the CSS snippet', () => {
+  // `menu` and the navigation arrows are excluded from addIcon because
+  // replacing their node broke the control (the phone toolbar button) or made
+  // them worse. But they are still in icons.json, marked `jsSkip`, so the boot
+  // snippet can mask them: CSS changes appearance without touching the DOM, so
+  // it cannot break anything. That distinction is the whole design.
+  const boot = readFileSync(new URL('../kit/mv-icons-boot.ts', import.meta.url), 'utf8');
+  assert.match(boot, /lucide-menu/, 'menu must be styled by the snippet');
+  assert.ok(!source.includes(`'menu':`), 'menu must not be in the registry');
+});
+
+test('the snippet is written where the timing works', () => {
+  // A plugin's own stylesheet is injected when the plugin loads — the same
+  // late moment as the JS. Only .obsidian/snippets is applied with the theme,
+  // which is the entire reason this file exists.
+  const installer = readFileSync(new URL('../icons/boot-snippet.ts', import.meta.url), 'utf8');
+  assert.match(installer, /\.obsidian\/snippets/);
+  // Updating the file must not silently re-enable one the user turned off.
+  assert.match(installer, /if \(!exists\) css\?\.setCssEnabledStatus/);
+});
+
 test('navigation arrows are deliberately left to Obsidian', () => {
   // Not every icon gains from being replaced. Back/forward are navigation
   // affordances that should recede: Lucide's thin stroke says what it must,

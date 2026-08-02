@@ -32,8 +32,17 @@ export interface PhoneChromeSlot {
  */
 export const DEFAULT_PHONE_CHROME_SLOTS: readonly PhoneChromeSlot[] = [
   { id: 'portal', icon: 'hi-panel-left', label: 'Files', viewType: 'portal' },
-  { id: 'recents', icon: 'clock', label: 'Recents', viewType: 'masonry' },
-  { id: 'tasks', icon: 'check-circle', label: 'Tasks', viewType: 'tasks' },
+  // Verified against the live view registry (`app.viewRegistry.viewByType`):
+  // Masonry's actual type is `masonry-all-docs`, not `masonry`. The wrong
+  // string meant this slot's view type was never registered, so it was
+  // permanently `enabled: false` — a dead pill, unreachable by tap or swipe.
+  { id: 'recents', icon: 'clock', label: 'Recents', viewType: 'masonry-all-docs' },
+  // Runway, not the Tasks plugin: that one has no full-page view at all (it
+  // renders inline ```tasks``` blocks inside notes), so 'tasks' never
+  // resolved and the pill was permanently dead. `runway-list` is the
+  // full-page leaf; `runway-sidebar` is the drawer variant and would fail
+  // the pager's container check the same way Portal's rail does.
+  { id: 'tasks', icon: 'check-circle', label: 'Tasks', viewType: 'runway-list' },
   { id: 'daily', icon: 'calendar', label: 'Daily', commandId: 'daily-notes' },
 ] as const;
 
@@ -50,6 +59,27 @@ function isSlot(value: unknown): value is PhoneChromeSlot {
 }
 
 /**
+ * `viewType: 'masonry'` shipped in `DEFAULT_PHONE_CHROME_SLOTS` before the
+ * real type (`masonry-all-docs`) was verified against the live view
+ * registry. Anyone who had the plugin loaded before that fix has the wrong
+ * string already written to `data.json` — a corrected default in source
+ * does nothing for state already on disk, and `phoneChromeSlots` has no
+ * settings-tab editor to fix it by hand. Never legitimate: 'masonry' was
+ * never a real view type, so rewriting it can't clobber an intentional
+ * customization the way touching any other field could. */
+const KNOWN_BAD_VIEW_TYPES: Readonly<Record<string, string>> = {
+  masonry: 'masonry-all-docs',
+  // Never a real view type: the Tasks plugin has no full-page leaf. The slot
+  // was always meant to reach Runway's list.
+  tasks: 'runway-list',
+};
+
+function migrateKnownBadViewType(slot: PhoneChromeSlot): PhoneChromeSlot {
+  const fixed = slot.viewType ? KNOWN_BAD_VIEW_TYPES[slot.viewType] : undefined;
+  return fixed ? { ...slot, viewType: fixed } : slot;
+}
+
+/**
  * Validate stored slots, falling back wholesale to the defaults on anything
  * malformed. Wholesale rather than per-slot on purpose: a half-repaired bar is
  * harder to reason about than a known-good one, and the user can always
@@ -59,7 +89,7 @@ function isSlot(value: unknown): value is PhoneChromeSlot {
 export function parsePhoneChromeSlots(value: unknown): PhoneChromeSlot[] {
   if (!Array.isArray(value)) return [...DEFAULT_PHONE_CHROME_SLOTS];
   if (!value.every(isSlot)) return [...DEFAULT_PHONE_CHROME_SLOTS];
-  const slots = value as PhoneChromeSlot[];
+  const slots = (value as PhoneChromeSlot[]).map(migrateKnownBadViewType);
   if (slots.length < MIN_SLOTS) return [...DEFAULT_PHONE_CHROME_SLOTS];
   const ids = new Set(slots.map((s) => s.id));
   if (ids.size !== slots.length) return [...DEFAULT_PHONE_CHROME_SLOTS];

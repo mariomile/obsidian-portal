@@ -2,6 +2,7 @@ import { Plugin } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import { installMvIcons, refreshRenderedIcons } from './kit/mv-icons';
 import { writeIconDiagnostics } from './icons/diagnostics';
+import { installBootSnippet } from './icons/boot-snippet';
 import { installMobileHeaderBack } from './nav/mobile-header-back';
 import { installNoteEnter } from './nav/note-enter';
 import { installPhoneChrome } from './phone-chrome/hub-level';
@@ -56,6 +57,11 @@ export default class PortalPlugin extends Plugin {
       // left a visible window where theme and chrome were already the new ones
       // and only the icons were still the old ones — the middle state.
       refreshRenderedIcons();
+      // The snippet covers the ~25 icons Obsidian draws before any plugin
+      // loads. It has to live in .obsidian/snippets, where it is applied with
+      // the theme — this plugin's own stylesheet would arrive just as late as
+      // the code above. Written from here so it needs no manual setup.
+      void installBootSnippet(this.app);
     }
 
     this.registerView(

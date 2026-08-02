@@ -69,3 +69,36 @@ test('a slot with both a view type and a command is rejected', () => {
   ];
   assert.deepEqual(parsePhoneChromeSlots(both), DEFAULT_PHONE_CHROME_SLOTS);
 });
+
+test('stored viewType "masonry" migrates to the real type, in place', () => {
+  const stale = [
+    { id: 'portal', icon: 'hi-panel-left', label: 'Files', viewType: 'portal' },
+    { id: 'recents', icon: 'clock', label: 'Recents', viewType: 'masonry' },
+    { id: 'tasks', icon: 'check-circle', label: 'Tasks', viewType: 'tasks' },
+    { id: 'daily', icon: 'calendar', label: 'Daily', commandId: 'daily-notes' },
+  ];
+  const parsed = parsePhoneChromeSlots(stale);
+  assert.equal(parsed[1]?.viewType, 'masonry-all-docs');
+  // 'tasks' was never a real view type either — the Tasks plugin has no
+  // full-page leaf, so that slot was always meant to reach Runway's list.
+  assert.equal(parsed[2]?.viewType, 'runway-list');
+  // Nothing else about the slots — or the rest of the array — is touched:
+  // this is a surgical string correction, not a wholesale reset.
+  assert.equal(parsed[1]?.id, 'recents');
+  assert.equal(parsed[1]?.label, 'Recents');
+  assert.equal(parsed[2]?.label, 'Tasks');
+  assert.equal(parsed[0]?.viewType, 'portal');
+  assert.equal(parsed[3]?.commandId, 'daily-notes');
+});
+
+test('a user-customized slot named "masonry" for something else is left alone', () => {
+  // Guards the migration's scope: it must key on the exact old value, not on
+  // slot id or label, so a real (if coincidentally named) customization
+  // survives.
+  const custom = [
+    { id: 'a', icon: 'i', label: 'A', viewType: 'masonry-all-docs' },
+    { id: 'b', icon: 'i', label: 'B', viewType: 'v2' },
+    { id: 'c', icon: 'i', label: 'C', viewType: 'v3' },
+  ];
+  assert.deepEqual(parsePhoneChromeSlots(custom), custom);
+});
