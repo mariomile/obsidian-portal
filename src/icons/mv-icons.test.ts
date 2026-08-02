@@ -64,6 +64,18 @@ test('the icon sweep runs at load, not only at layout-ready', () => {
   assert.match(onload, /installMvIcons\([^)]*\);[\s\S]{0,900}refreshRenderedIcons\(\)/);
 });
 
+test('the child-hiding rule repeats the combinator on every selector', () => {
+  // Regression guard for a bug that made a button vanish. In CSS a combinator
+  // binds only to the LAST selector of a list: `a, b > *` means "all of a" plus
+  // "the children of b". Written once, the rule put display:none on the icon
+  // itself for the first selector.
+  //
+  // Only visible on glyphs that live by CSS alone — everything the registry
+  // converts is excluded by the `:not()`, so the defect hid behind that for a
+  // whole release.
+  assert.match(source, /\$\{byLucide\}>\*,\$\{byName\}>\*\{display:none\}/);
+});
+
 test('CSS-only glyphs are reachable by the snippet builder', () => {
   // Regression guard. `jsSkip` names are excluded from PATHS — that exclusion
   // IS what keeps them out of the registry. But the CSS snippet still needs

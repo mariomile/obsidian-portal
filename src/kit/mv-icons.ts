@@ -1251,22 +1251,31 @@ export function buildBootCss(variant?: string): string {
     // maschera a ciò che il plugin non ha ancora convertito, così le due non
     // si sovrappongono mai.
     const not = ':not(:has(g[data-mv-icon]))';
-    const sel = `.svg-icon.lucide-${name}${not},.svg-icon.${name}${not}`;
+    const byLucide = `.svg-icon.lucide-${name}${not}`;
+    const byName = `.svg-icon.${name}${not}`;
+    // `> *` va ripetuto su OGNI selettore della lista: in CSS il combinatore
+    // lega solo all'ultimo, quindi `a, b > *` colpisce `a` per intero e i figli
+    // di `b`. Scritto una volta sola metteva display:none sull'icona stessa e
+    // la faceva sparire — succedeva al pulsante del menu.
     rules.push(
-      `${sel}{background-color:currentColor;-webkit-mask:${url};mask:${url}}`,
-      `${sel}>*{display:none}`,
+      `${byLucide},${byName}{background-color:currentColor;-webkit-mask:${url};mask:${url}}`,
+      `${byLucide}>*,${byName}>*{display:none}`,
     );
   }
   const NL = String.fromCharCode(10);
-  // Il marcatore include il NUMERO di regole, non solo set e variante: se
-  // cambia l'elenco delle icone coperte — com'è successo aggiungendo `menu` —
-  // set e variante restano gli stessi e il file su disco non verrebbe
-  // riscritto. Il conteggio rende il cambiamento visibile.
+  // Il marcatore è un HASH del contenuto, non set+variante né il conteggio
+  // delle regole. Entrambi i tentativi precedenti hanno lasciato il file su
+  // disco fermo mentre il CSS generato cambiava: la prima volta aggiungendo
+  // un'icona all'elenco, la seconda correggendo la forma di un selettore a
+  // parità di numero. Un hash cambia con qualunque modifica.
+  const body_ = rules.join(NL);
+  let h = 5381;
+  for (let i = 0; i < body_.length; i += 1) h = ((h * 33) ^ body_.charCodeAt(i)) >>> 0;
   const header =
-    `/* mv-icons [${MV_ICON_SET}·${rules.length / 2}] — GENERATO dal plugin, non editare a mano.` +
+    `/* mv-icons [${MV_ICON_SET}·${h.toString(36)}] — GENERATO dal plugin, non editare a mano.` +
     NL +
     `   Copre le ${BOOT_NAMES.length} icone disegnate prima che i plugin carichino. */`;
-  return [header, ...rules, ''].join(NL);
+  return [header, body_, ''].join(NL);
 }
 
 /** Identifica set e variante di questo snippet, così il plugin sa se il file
