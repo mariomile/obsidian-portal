@@ -208,12 +208,13 @@
    presentation attributes, so without this rule a theme's `fill: none` would
    erase every glyph and its stroke-width would draw hairlines around them.
 
-   The `scale(0.390625)` transform is the marker: it is the wrapper addIcon()
-   requires to map the Phosphor 256 grid onto its fixed 100 viewBox, so it is
-   present on our glyphs and on nothing else. Wins on specificity, not
-   `!important` — see the design-contract rule. */
-.svg-icon g[transform='scale(0.390625)'],
-.svg-icon g[transform='scale(0.390625)'] path {
+   `data-mv-icon` is the marker, deliberately not the transform: the transform
+   value depends on the icon family (Phosphor only scaled; Material scales and
+   translates), so a selector naming it would quietly stop matching the day the
+   set changes — which is exactly what happened once already. Wins on
+   specificity, not `!important` — see the design-contract rule. */
+.svg-icon g[data-mv-icon],
+.svg-icon g[data-mv-icon] path {
   fill: currentColor;
   stroke: none;
 }
