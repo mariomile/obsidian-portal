@@ -105,6 +105,22 @@ test('path data reaches the DOM whole, never split', () => {
   }
 });
 
+test('the CSS guard matches what the module actually emits', () => {
+  // Regression guard. styles.css protects the glyphs from themes that style
+  // `.svg-icon` for stroke-based Lucide (`fill: none`). That guard originally
+  // keyed off the transform value — which is set-specific — so switching from
+  // Phosphor to Material silently orphaned it: the rule was still there,
+  // matching nothing. The marker attribute has to be the join between the two
+  // files, and both sides have to agree on it.
+  assert.match(source, /<g data-mv-icon transform=/, 'emitted glyphs must carry the marker');
+  const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.svg-icon g\[data-mv-icon\]/, 'CSS must select on the marker');
+  assert.ok(
+    !/g\[transform=/.test(css),
+    'CSS must not key off the transform value: it changes with the icon set',
+  );
+});
+
 test('glyphs are solid (fill), not stroked', () => {
   // This is what makes the set read as "solid" — filled shapes, no outline.
   assert.match(source, /fill="currentColor"/);
@@ -188,6 +204,30 @@ test('is mobile-safe: no Node/Electron builtins', () => {
   for (const banned of ['node:', 'electron', "require('fs", "require('path", 'process.']) {
     assert.ok(!source.includes(banned), `mobile-unsafe reference found: ${banned}`);
   }
+});
+
+test('the icon override ships off by default, and migrates existing installs', () => {
+  // Portal is a public plugin. Overriding the icon registry changes glyphs far
+  // outside Portal's own surface — Obsidian's chrome and other people's plugins
+  // — and addIcon() has no runtime undo, so a default-on version could not be
+  // taken back without restarting the app. Someone installing a sidebar plugin
+  // has not asked for that.
+  const settings = readFileSync(new URL('../settings.ts', import.meta.url), 'utf8');
+  assert.match(settings, /mvIcons: false,/, 'mvIcons must default to false');
+  // But an install that had the feature on under its old name must keep it.
+  assert.match(settings, /data\.hugeCoreIcons/, 'legacy flag migration must survive');
+});
+
+test('third-party artwork is attributed', () => {
+  // The glyphs are Apache-2.0 material redistributed inside main.js, in
+  // modified form. That licence requires the notice, a copy of the licence,
+  // and a statement of changes.
+  const notice = readFileSync(new URL('../../NOTICE', import.meta.url), 'utf8');
+  assert.match(notice, /Material Symbols/);
+  assert.match(notice, /Apache License, Version 2\.0/);
+  assert.match(notice, /MODIFICATIONS/);
+  const apache = readFileSync(new URL('../../LICENSE-APACHE-2.0', import.meta.url), 'utf8');
+  assert.match(apache, /Apache License/);
 });
 
 test('carries no Iconize dependency', () => {

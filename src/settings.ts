@@ -60,10 +60,15 @@ export interface PortalSettings {
    *  for vault-internal asset directories that must live in synced vault
    *  content but aren't knowledge to browse. */
   hiddenFolders: string[];
-  /** Re-skin Obsidian's Lucide icons with the Phosphor `fill` set, so the whole
-   *  app — core chrome AND every plugin that calls `setIcon()` — speaks one
-   *  iconographic language. Default ON. There is no runtime undo for
-   *  `addIcon()`, so turning this OFF only takes effect after an app restart. */
+  /** Re-skin Obsidian's Lucide icons with the Material Symbols set, so the
+   *  whole app — core chrome AND every plugin that calls `setIcon()` — speaks
+   *  one iconographic language.
+   *
+   *  **Default OFF, deliberately.** This writes into Obsidian's global icon
+   *  registry, so it changes icons far outside Portal's own surface, including
+   *  other people's plugins. Someone installing a sidebar plugin hasn't asked
+   *  for that, and `addIcon()` has no runtime undo — a default-on version could
+   *  not be taken back without an app restart. Opt-in only. */
   mvIcons: boolean;
   /** Folder path → icon name, the tree's per-folder icon overrides.
    *
@@ -100,7 +105,7 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   sectionOrder: [...PORTAL_SECTION_KEYS],
   desktopNoteTransition: false,
   hiddenFolders: [],
-  mvIcons: true,
+  mvIcons: false,
   // Empty by design: Portal ships to other vaults, so folder→icon choices are
   // user config, never defaults baked into the plugin.
   folderIcons: {},
@@ -217,7 +222,7 @@ export class PortalSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Unified icon set')
       .setDesc(
-        'Re-skin Obsidian’s icons with the Phosphor solid set, so the app’s own chrome and every plugin that draws an icon match. Turning this off takes effect only after an app restart — icon overrides cannot be undone at runtime.',
+        'Re-skin Obsidian’s icons with the Material Symbols set, so the app’s own chrome and every plugin that draws an icon match. This reaches well beyond Portal — including your other plugins — so it is off by default. Both turning it on and turning it off take effect only after an app restart: icon overrides cannot be undone at runtime.',
       )
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.mvIcons).onChange(async (value) => {

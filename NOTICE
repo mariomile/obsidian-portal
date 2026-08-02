@@ -1,0 +1,44 @@
+Portal
+Copyright (c) 2026 Mario Miletta
+
+This product includes software developed by third parties, listed below.
+
+--------------------------------------------------------------------------------
+Material Symbols
+--------------------------------------------------------------------------------
+
+Portal's unified icon set (`src/kit/mv-icons.ts`) embeds glyph path data from
+Material Symbols, the icon library published by Google.
+
+    Source:   https://github.com/google/material-design-icons
+    Package:  @material-symbols/svg-400 (rounded style, filled variant)
+    License:  Apache License, Version 2.0
+    Copyright (c) Google LLC
+
+A copy of the Apache License, Version 2.0 is included in this repository as
+LICENSE-APACHE-2.0, and is also available at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+MODIFICATIONS
+-------------
+
+The glyphs are redistributed in modified form. Specifically:
+
+  1. Each glyph's `<path>` data is extracted from its source SVG file and
+     embedded as a string literal, rather than shipped as an .svg asset.
+
+  2. Each glyph is wrapped in a transform that maps Material's native 960-unit
+     grid (viewBox "0 -960 960 960") onto the fixed "0 0 100 100" viewBox that
+     Obsidian's addIcon() API imposes:
+
+         <g transform="scale(0.1041667) translate(0 960)" fill="currentColor">
+
+     The glyph outlines themselves are unaltered.
+
+  3. Glyphs are indexed under Lucide icon names rather than their Material
+     names, so that they resolve through Obsidian's existing icon registry.
+     The name mapping (for example `trash` to Material's `delete`, `brain` to
+     `psychology`) is Portal's own and is not part of Material Symbols.
+
+No other changes were made to the artwork.

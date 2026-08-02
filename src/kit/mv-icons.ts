@@ -474,10 +474,15 @@ const TRANSFORM = 'scale(0.1041667) translate(0 960)';
  *  `fill` (non `stroke`) è ciò che rende il set "solid": i glifi sono forme
  *  piene, senza contorno.
  *
+ *  `data-mv-icon` è il marker con cui il CSS riconosce i nostri glifi. Serve
+ *  un attributo dedicato e non il transform: quel valore cambia con il set
+ *  (Phosphor scalava e basta, Material scala e trasla), e un selettore che lo
+ *  cita smetterebbe silenziosamente di applicarsi al primo cambio famiglia.
+ *
  *  `d` viene interpolato intero, mai spezzato: i path data contengono virgole
  *  e spazi, quindi qualsiasi split li frammenterebbe in glifi corrotti. */
 function body(d: string): string {
-  return `<g transform="${TRANSFORM}" fill="currentColor"><path d="${d}"/></g>`;
+  return `<g data-mv-icon transform="${TRANSFORM}" fill="currentColor"><path d="${d}"/></g>`;
 }
 
 /** Quanti nomi Lucide questo modulo sovrascrive. */
