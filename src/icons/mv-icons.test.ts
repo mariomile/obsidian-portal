@@ -39,13 +39,22 @@ test('covers the core Lucide names Obsidian chrome draws', () => {
     'link',
     'tag',
     'pencil',
-    'arrow-left',
-    'arrow-right',
     'check',
     'info',
   ];
   for (const key of required) {
     assert.ok(source.includes(`'${key}':`), `missing core-icon key: ${key}`);
+  }
+});
+
+test('navigation arrows are deliberately left to Obsidian', () => {
+  // Not every icon gains from being replaced. Back/forward are navigation
+  // affordances that should recede: Lucide's thin stroke says what it must,
+  // while the duotone version renders them as slabs that shout. Leaving them
+  // out is a taste decision, not an oversight, so it is asserted rather than
+  // left to drift back in on the next regeneration.
+  for (const key of ['arrow-left', 'arrow-right']) {
+    assert.ok(!source.includes(`'${key}':`), `${key} must stay Obsidian's own`);
   }
 });
 

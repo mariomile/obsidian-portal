@@ -4,7 +4,7 @@ import { addIcon, setIcon } from 'obsidian';
 // Rigenera con: marioverse-kit/sync.sh
 //
 // Set: Solar (CC-BY-4.0), variante `bold duotone`.
-// 395 nomi Lucide → 298 glifi
+// 393 nomi Lucide → 296 glifi
 // distinti (gli alias storici — alert-triangle/triangle-alert, ellipsis/
 // more-horizontal, loader/loader-2 — puntano allo stesso glifo, così il naming
 // drift accumulato nella suite si risolve qui invece che in 16 repo).
@@ -32,9 +32,7 @@ const PATHS: Record<string, string> = {
   'arrow-down': '<path fill="currentColor" fill-rule="evenodd" d="M12 3.25a.75.75 0 0 1 .75.75v9.25h-1.5V4a.75.75 0 0 1 .75-.75" clip-rule="evenodd" opacity=".5"/><path fill="currentColor" d="M6 13.25a.75.75 0 0 0-.53 1.28l6 6a.75.75 0 0 0 1.06 0l6-6a.75.75 0 0 0-.53-1.28z"/>',
   'arrow-down-01': '<path fill="currentColor" fill-rule="evenodd" d="M12 3.25a.75.75 0 0 1 .75.75v9.25h-1.5V4a.75.75 0 0 1 .75-.75" clip-rule="evenodd" opacity=".5"/><path fill="currentColor" d="M6 13.25a.75.75 0 0 0-.53 1.28l6 6a.75.75 0 0 0 1.06 0l6-6a.75.75 0 0 0-.53-1.28z"/>',
   'arrow-down-10': '<path fill="currentColor" fill-rule="evenodd" d="M12 3.25a.75.75 0 0 1 .75.75v9.25h-1.5V4a.75.75 0 0 1 .75-.75" clip-rule="evenodd" opacity=".5"/><path fill="currentColor" d="M6 13.25a.75.75 0 0 0-.53 1.28l6 6a.75.75 0 0 0 1.06 0l6-6a.75.75 0 0 0-.53-1.28z"/>',
-  'arrow-left': '<path fill="currentColor" fill-rule="evenodd" d="M20.75 12a.75.75 0 0 0-.75-.75h-9.25v1.5H20a.75.75 0 0 0 .75-.75" clip-rule="evenodd" opacity=".5"/><path fill="currentColor" d="M10.75 18a.75.75 0 0 1-1.28.53l-6-6a.75.75 0 0 1 0-1.06l6-6a.75.75 0 0 1 1.28.53z"/>',
   'arrow-left-right': '<path fill="currentColor" d="M10.875 4a.75.75 0 0 0-1.272-.538l-4.125 4a.75.75 0 0 0 0 1.076l4.125 4A.75.75 0 0 0 10.875 12V8.75H18a.75.75 0 0 0 0-1.5h-7.125z"/><path fill="currentColor" d="M13.125 12a.75.75 0 0 1 1.272-.538l4.125 4a.75.75 0 0 1 0 1.076l-4.125 4A.75.75 0 0 1 13.125 20v-3.25H6a.75.75 0 0 1 0-1.5h7.125z" opacity=".5"/>',
-  'arrow-right': '<path fill="currentColor" fill-rule="evenodd" d="M3.25 12a.75.75 0 0 1 .75-.75h9.25v1.5H4a.75.75 0 0 1-.75-.75" clip-rule="evenodd" opacity=".5"/><path fill="currentColor" d="M13.25 12.75V18a.75.75 0 0 0 1.28.53l6-6a.75.75 0 0 0 0-1.06l-6-6a.75.75 0 0 0-1.28.53z"/>',
   'arrow-up': '<path fill="currentColor" fill-rule="evenodd" d="M12 20.75a.75.75 0 0 0 .75-.75v-9.25h-1.5V20c0 .414.336.75.75.75" clip-rule="evenodd" opacity=".5"/><path fill="currentColor" d="M6 10.75a.75.75 0 0 1-.53-1.28l6-6a.75.75 0 0 1 1.06 0l6 6a.75.75 0 0 1-.53 1.28z"/>',
   'arrow-up-01': '<path fill="currentColor" fill-rule="evenodd" d="M12 20.75a.75.75 0 0 0 .75-.75v-9.25h-1.5V20c0 .414.336.75.75.75" clip-rule="evenodd" opacity=".5"/><path fill="currentColor" d="M6 10.75a.75.75 0 0 1-.53-1.28l6-6a.75.75 0 0 1 1.06 0l6 6a.75.75 0 0 1-.53 1.28z"/>',
   'arrow-up-10': '<path fill="currentColor" fill-rule="evenodd" d="M12 20.75a.75.75 0 0 0 .75-.75v-9.25h-1.5V20c0 .414.336.75.75.75" clip-rule="evenodd" opacity=".5"/><path fill="currentColor" d="M6 10.75a.75.75 0 0 1-.53-1.28l6-6a.75.75 0 0 1 1.06 0l6 6a.75.75 0 0 1-.53 1.28z"/>',
@@ -436,7 +434,7 @@ function body(inner: string): string {
 }
 
 /** Quanti nomi Lucide questo modulo sovrascrive. */
-export const MV_ICON_COUNT = 395;
+export const MV_ICON_COUNT = 393;
 
 /** Nomi Lucide coperti dall'override, per test e diagnostica. */
 export const MV_ICON_NAMES: readonly string[] = Object.keys(PATHS);
