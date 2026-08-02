@@ -14,16 +14,20 @@ import type { PhoneChromeSlot } from './slots';
  */
 export interface ResolvedSlot {
   slot: PhoneChromeSlot;
-  /** The slot's target exists AND, for a view slot, an open leaf for it is
-   *  actually reachable inside the hub container — so tapping or paging to
-   *  it does something real rather than silently nothing. A command slot
-   *  needs no leaf; running it is enough on its own. */
+  /** Tapping this slot does something. For a view slot: the view type is
+   *  REGISTERED (its plugin is installed and enabled) — no open leaf is
+   *  required, because a tap can now create one on demand (see
+   *  `hub-level.ts`'s `onSelect`). For a command slot: the command is
+   *  registered; running it is enough on its own. */
   enabled: boolean;
   /**
-   * The pager can slide into this slot. True only for view-backed slots:
-   * a command slot has no leaf to reveal (running `daily-notes` opens a
-   * markdown leaf, which is by definition not hub level), so it is a
-   * tap-only action and the pager rubber-bands instead.
+   * The pager can slide into this slot RIGHT NOW. True only when the slot is
+   * enabled, view-backed, AND an open leaf for it is already reachable
+   * inside the hub container — a slot that has never been opened is tappable
+   * (see `enabled`) but not swipeable until its leaf exists. A command slot
+   * has no leaf to reveal (running `daily-notes` opens a markdown leaf,
+   * which is by definition not hub level), so it is always tap-only and the
+   * pager rubber-bands instead.
    */
   pageable: boolean;
 }
@@ -33,10 +37,9 @@ export function resolveSlots(
   hasViewType: (type: string) => boolean,
   hasCommand: (id: string) => boolean,
   /** Does an open leaf for this view type actually live where the pager can
-   *  reach and clean it up (a child of the hub container)? A view slot with
-   *  no reachable leaf must report disabled, not just non-pageable — with no
-   *  leaf to hand over, tapping it does exactly nothing either, and it would
-   *  otherwise advertise a swipe destination that goes nowhere. Defaults to
+   *  reach and clean it up (a child of the hub container)? Gates `pageable`
+   *  only — an unopened view is still `enabled` (tappable), just not yet
+   *  swipeable, since tapping it can create the leaf lazily. Defaults to
    *  always-true so callers/tests that only care about view-type/command
    *  registration are unaffected; the real, workspace-aware predicate is
    *  supplied by hub-level.ts. */
@@ -44,11 +47,12 @@ export function resolveSlots(
 ): ResolvedSlot[] {
   return slots.map((slot) => {
     const enabled = slot.viewType
-      ? hasViewType(slot.viewType) && hasReachableLeaf(slot.viewType)
+      ? hasViewType(slot.viewType)
       : slot.commandId
         ? hasCommand(slot.commandId)
         : false;
-    return { slot, enabled, pageable: enabled && Boolean(slot.viewType) };
+    const pageable = slot.viewType ? enabled && hasReachableLeaf(slot.viewType) : false;
+    return { slot, enabled, pageable };
   });
 }
 

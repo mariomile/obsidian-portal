@@ -79,6 +79,15 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
    *  triggered by `pager.destroy()` bails immediately instead of re-dirtying
    *  the DOM we are in the middle of releasing. */
   let unmounted = false;
+  /** Set once, permanently, when the plugin itself unloads (see the
+   *  `plugin.register` call near the bottom of this function). Guards the
+   *  lazy leaf-creation continuation in `navbar.onSelect`: `setViewState`'s
+   *  promise can resolve after the plugin — and this whole closure — has
+   *  been torn down, and calling `sync()` at that point would needlessly
+   *  touch the workspace on behalf of a chrome instance nothing owns
+   *  anymore. Distinct from `unmounted`, which is transient (true only
+   *  during a single synchronous `unmount()` call). */
+  let disposed = false;
   /** Handle for the mount-time `setTimeout(0)` render backstop, so unload
    *  mid-flight can cancel it instead of letting it fire against a torn-down
    *  navbar. */
@@ -305,10 +314,40 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
       if (gestureInFlight) return;
       const entry = resolved[index];
       if (!entry?.enabled) return;
-      // Tap-only slots run their command and leave the bar where it is —
-      // the command usually opens a note, which unmounts the chrome anyway.
+      // Tap-only: either a command slot (run it and leave the bar where it
+      // is — the command usually opens a note, which unmounts the chrome
+      // anyway), or a view slot that is enabled but has no reachable leaf
+      // yet. The latter is the lazy-creation path: create the leaf in the
+      // workspace ROOT (never a sidebar — see `TAB_CONTAINER`/`leafEl()`),
+      // then let `sync()` pick up the new leaf and bring the bar (and
+      // `activeIndex`) up to date. Never done at mount and never during a
+      // gesture — see the module doc comment on why creation stays lazy.
       if (!entry.pageable) {
-        if (entry.slot.commandId) executeCommand(plugin.app, entry.slot.commandId);
+        if (entry.slot.commandId) {
+          executeCommand(plugin.app, entry.slot.commandId);
+          return;
+        }
+        const viewType = entry.slot.viewType;
+        if (!viewType) return;
+        void plugin.app.workspace
+          .getLeaf('tab')
+          .setViewState({ type: viewType, active: true })
+          .then(() => {
+            // A failed creation (rejected promise) never reaches this
+            // branch — the bar is left exactly as it was, not half
+            // committed. A successful one is picked up here rather than by
+            // reaching into the new leaf ourselves: `sync()` re-resolves
+            // `resolved`/`activeIndex` from scratch, which keeps this one
+            // code path (not two) responsible for bringing the bar to a
+            // consistent state.
+            if (disposed) return;
+            sync();
+          })
+          .catch(() => {
+            // setViewState rejected (e.g. the view's own onOpen threw) —
+            // nothing to clean up: no leaf reference was kept, and the bar
+            // was never touched, so there is nothing to roll back.
+          });
         return;
       }
       const leaf = slotLeaves()[index];
@@ -591,7 +630,10 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
   // `.workspace-tabs` and the pager's four document-capture touch listeners
   // alive for the rest of the session — a dead plugin still translating
   // leaves and swallowing touches.
-  plugin.register(() => unmount());
+  plugin.register(() => {
+    disposed = true;
+    unmount();
+  });
 
   // Exposed so the settings tab's `phoneChrome` toggle can apply live: the
   // spec promises that, and without an explicit hook it would only take
