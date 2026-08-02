@@ -568,6 +568,9 @@ body.is-phone .portal-section-header {
   --portal-phone-gap: 8px;
   position: relative;
   display: block;
+  /* The host (.workspace-tabs) is a column flex on mobile: without this the
+     bar gets shrunk to nothing by the content container's flex: 1. */
+  flex: 0 0 auto;
   height: var(--portal-phone-icon-size);
   margin: var(--size-4-2, 8px) var(--size-4-3, 12px);
 }
@@ -597,8 +600,11 @@ body.is-phone .portal-section-header {
    renders with an out-of-range index) and reads uniformly dimmed, "you are
    not in any of these", rather than keep advertising whichever slot was
    last active at hub level. */
+/* Detail level: no slot is active, but every slot is still TAPPABLE — so they
+   read as inactive chrome, not as disabled controls. --text-faint is the
+   disabled colour and made them look like leftover debris on the page. */
 .portal-phone-navbar.is-detail .portal-phone-slot {
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 /* 3-slice capsule wash. The wrapper only fades; its slices only transform. */

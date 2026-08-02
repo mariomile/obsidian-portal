@@ -491,7 +491,9 @@ export function installPhoneChrome(plugin: PortalPlugin): () => void {
     mountedSlotsSignature = slotsSignature();
 
     const host = container.parentElement ?? container;
-    navbar = new PhoneChromeNavbar(host, resolved);
+    // Anchor on the content container so the bar lands ABOVE the note rather
+    // than after it — createDiv() appends, which put it mid-page on device.
+    navbar = new PhoneChromeNavbar(host, resolved, container);
     // Backstop 2: the container may gain its width a frame after we attach.
     // render() is idempotent and no-ops at zero width, so an extra call is
     // free; without it a mount into an unlaid-out host is permanent. Tracked

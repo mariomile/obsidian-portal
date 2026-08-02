@@ -34,11 +34,22 @@ export class PhoneChromeNavbar {
   private gap = 8;
   private capWidth = 20;
 
+  /**
+   * @param anchor Node inside `host` to insert the bar BEFORE. Required in
+   *   practice: `createDiv()` appends, and the host is Obsidian's
+   *   `.workspace-tabs`, whose content container is its own child — appending
+   *   therefore drops the bar UNDER the note instead of above it, which is
+   *   exactly how it shipped and how it looked on device. Anchoring on the
+   *   content container is deterministic and does not depend on the host's
+   *   flex direction or on how many children Obsidian gives it.
+   */
   constructor(
     host: HTMLElement,
     private readonly resolved: ResolvedSlot[],
+    anchor?: Node | null,
   ) {
     this.el = host.createDiv({ cls: 'portal-phone-navbar' });
+    if (anchor && anchor.parentNode === host) host.insertBefore(this.el, anchor);
 
     this.resolved.forEach((entry, index) => {
       const slotEl = this.el.createDiv({ cls: 'portal-phone-slot' });
