@@ -221,9 +221,15 @@ test('alias pairs resolve to byte-identical paths', () => {
   }
 });
 
-test('the glyph count in the header matches the glyphs actually emitted', () => {
+test('the glyph count in the header matches the glyphs actually registered', () => {
   // The header is documentation; documentation that disagrees with the file is
   // worse than none, and here it is also the count the settings UI implies.
+  //
+  // Counted over the registered table alone. The module also ships the
+  // alternative weights and the CSS-only glyphs, and `glyphs()` sees all of
+  // them — but `MV_ICON_COUNT` reports what `addIcon` will register, which is
+  // a smaller set.
   const declared = Number(/export const MV_ICON_COUNT = (\d+);/.exec(MODULE)?.[1]);
-  assert.equal(declared, glyphs().length);
+  const table = MODULE.slice(MODULE.indexOf('const PATHS'), MODULE.indexOf('const TRANSFORM'));
+  assert.equal(declared, (table.match(/^ {2}'[a-z0-9-]+':/gm) ?? []).length);
 });

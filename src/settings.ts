@@ -98,6 +98,11 @@ export interface PortalSettings {
   phoneChrome: boolean;
   /** The hub views the phone-chrome pager moves between, in bar order. */
   phoneChromeSlots: PhoneChromeSlot[];
+  /** Phone-only: a segmented pill bar at the top of the right drawer that
+   *  switches its tabs in one tap, instead of Obsidian's press-and-slide
+   *  selector. Reads the drawer's real tabs — nothing to configure. Additive:
+   *  the native selector stays. Default OFF. Applies live. */
+  drawerTabs: boolean;
 }
 
 export const DEFAULT_SETTINGS: PortalSettings = {
@@ -122,6 +127,7 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   mobileHeaderBack: true,
   phoneChrome: false,
   phoneChromeSlots: [...DEFAULT_PHONE_CHROME_SLOTS],
+  drawerTabs: false,
 };
 
 const asStringArray = (value: unknown, fallback: string[]): string[] =>
@@ -202,6 +208,8 @@ export function parseSettings(raw: unknown): PortalSettings {
         ? data.phoneChrome
         : DEFAULT_SETTINGS.phoneChrome,
     phoneChromeSlots: parsePhoneChromeSlots(data.phoneChromeSlots),
+    drawerTabs:
+      typeof data.drawerTabs === 'boolean' ? data.drawerTabs : DEFAULT_SETTINGS.drawerTabs,
   };
 }
 
@@ -314,6 +322,21 @@ export class PortalSettingTab extends PluginSettingTab {
             // layout-change/active-leaf-change.
             this.plugin.syncPhoneChrome();
           }),
+      );
+
+    new Setting(containerEl)
+      .setName('Drawer tab bar')
+      .setDesc(
+        'Phone only. Adds a pill bar at the top of the right sidebar that switches ' +
+          'its tabs in one tap, instead of pressing and sliding the native selector. ' +
+          'Shows whatever tabs are actually in there — nothing to configure.',
+      )
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.drawerTabs).onChange(async (value) => {
+          this.plugin.settings.drawerTabs = value;
+          await this.plugin.saveSettings();
+          this.plugin.syncDrawerTabs();
+        }),
       );
 
     new Setting(containerEl)

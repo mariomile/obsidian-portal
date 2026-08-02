@@ -4,7 +4,7 @@
  * through here (via `as unknown as` narrowing — never `any`) and defensively
  * guarded, so the rest of the plugin stays clean and type-safe.
  */
-import type { App } from 'obsidian';
+import type { App, WorkspaceLeaf } from 'obsidian';
 
 interface GlobalSearchInstance {
   openGlobalSearch(query: string): void;
@@ -175,4 +175,34 @@ export function isCommandRegistered(app: App, id: string): boolean {
     registry !== null &&
     Object.prototype.hasOwnProperty.call(registry, id)
   );
+}
+
+/** The mobile drawer's tab controller. Obsidian's own press-and-slide tab
+ *  selector drives exactly this (`app.js`: `elementFromPoint` → the tab
+ *  header under the finger → `selectTabIndex`), so it is the sanctioned way
+ *  to change a drawer's active tab — there is no public equivalent.
+ *  Untyped, hence the narrow local shape and defensive guards. */
+interface DrawerTabParent {
+  children?: unknown[];
+  currentTab?: number;
+  selectTabIndex?: (index: number) => void;
+}
+
+/** The `WorkspaceMobileDrawer` a sidebar leaf belongs to, or null when the
+ *  structure is not what we expect (an Obsidian change, or a leaf that is not
+ *  in a drawer). Callers degrade to doing nothing rather than throwing. */
+export function drawerTabParentOf(leaf: WorkspaceLeaf): DrawerTabParent | null {
+  const parent = (leaf as unknown as { parent?: DrawerTabParent }).parent;
+  if (!parent || typeof parent !== 'object') return null;
+  if (typeof parent.selectTabIndex !== 'function') return null;
+  if (!Array.isArray(parent.children)) return null;
+  return parent;
+}
+
+/** Switch a drawer to the tab at `index`. No-ops on any structural miss or an
+ *  out-of-range index — a stale index must never throw in an event handler. */
+export function selectDrawerTab(parent: DrawerTabParent, index: number): void {
+  const count = Array.isArray(parent.children) ? parent.children.length : 0;
+  if (index < 0 || index >= count) return;
+  parent.selectTabIndex?.(index);
 }

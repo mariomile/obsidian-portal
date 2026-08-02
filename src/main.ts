@@ -5,6 +5,7 @@ import { writeIconDiagnostics } from './icons/diagnostics';
 import { installBootSnippet } from './icons/boot-snippet';
 import { installMobileHeaderBack } from './nav/mobile-header-back';
 import { installNoteEnter } from './nav/note-enter';
+import { installDrawerTabs } from './phone-chrome/drawer-tabs';
 import { installPhoneChrome } from './phone-chrome/hub-level';
 import { installTabDedupe } from './nav/tab-dedupe';
 import { PortalView, PORTAL_VIEW_TYPE } from './portal-view';
@@ -35,6 +36,9 @@ export default class PortalPlugin extends Plugin {
    *  toggle can apply live instead of waiting for the next
    *  layout-change/active-leaf-change. Assigned in `onload()`. */
   syncPhoneChrome: () => void = () => {};
+  /** Re-syncs the right-drawer tab bar — a no-op on desktop. Same reason as
+   *  `syncPhoneChrome`: the settings toggle must apply live. */
+  syncDrawerTabs: () => void = () => {};
 
   async onload(): Promise<void> {
     this.settings = parseSettings(await this.loadData());
@@ -108,6 +112,9 @@ export default class PortalPlugin extends Plugin {
 
     // Phone-only: segmented hub navbar with a swipe pager (default off).
     this.syncPhoneChrome = installPhoneChrome(this);
+
+    // Phone-only: pill bar over the right drawer's native tabs (default off).
+    this.syncDrawerTabs = installDrawerTabs(this);
 
     // Re-apply the hide whenever the layout changes, so a file-explorer leaf
     // the user re-adds (e.g. via the "Files" ribbon) gets hidden again.

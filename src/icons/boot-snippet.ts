@@ -52,17 +52,21 @@ export async function installBootSnippet(
     const adapter = app.vault.adapter;
     const exists = await adapter.exists(SNIPPET_PATH);
     const current = exists ? await adapter.read(SNIPPET_PATH) : '';
-    const stamp = `${MV_ICON_SET}${variant ? `-${variant}` : ''}`;
+    // The marker the freshly built CSS carries. Comparing against it — rather
+    // than against a stamp assembled here — means the file is rewritten
+    // whenever anything about its contents changes, including the list of
+    // icons covered. Assembling it separately once let a new icon slip in
+    // without the file on disk ever being updated.
+    const css = buildBootCss(variant);
+    const marker = /\[([^\]]+)\]/.exec(css)?.[1] ?? MV_ICON_SET;
+    const stamp = `${marker}${variant ? `-${variant}` : ''}`;
 
     if (!current.includes(`[${stamp}]`)) {
-      const css = buildBootCss(variant).replace(
-        `[${MV_ICON_SET}]`,
-        `[${stamp}]`,
-      );
+      const stamped = css.replace(`[${marker}]`, `[${stamp}]`);
       if (!(await adapter.exists('.obsidian/snippets'))) {
         await adapter.mkdir('.obsidian/snippets');
       }
-      await adapter.write(SNIPPET_PATH, css);
+      await adapter.write(SNIPPET_PATH, stamped);
 
       const manager = (app as App & { customCss?: CustomCss }).customCss;
       manager?.readSnippets?.();

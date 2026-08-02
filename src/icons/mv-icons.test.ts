@@ -12,6 +12,11 @@ import test from 'node:test';
 // they must keep passing without being loosened to fit a bad generation.
 const source = readFileSync(new URL('../kit/mv-icons.ts', import.meta.url), 'utf8');
 
+/** Only the table that gets registered. The module also carries the alternative
+ *  weights and the CSS-only glyphs, so a plain `source.includes` would answer a
+ *  different question than "is this name registered". */
+const registered = source.slice(source.indexOf('const PATHS'), source.indexOf('const TRANSFORM'));
+
 test('is generated, and says so', () => {
   assert.match(source, /GENERATO da marioverse-kit\/mv-icons/);
 });
@@ -59,15 +64,30 @@ test('the icon sweep runs at load, not only at layout-ready', () => {
   assert.match(onload, /installMvIcons\([^)]*\);[\s\S]{0,900}refreshRenderedIcons\(\)/);
 });
 
+test('CSS-only glyphs are reachable by the snippet builder', () => {
+  // Regression guard. `jsSkip` names are excluded from PATHS — that exclusion
+  // IS what keeps them out of the registry. But the CSS snippet still needs
+  // their glyph, and `buildBootCss` used to look only in PATHS: it found
+  // nothing and skipped them silently, so the menu button stayed native for a
+  // whole release without anything failing.
+  assert.match(source, /const CSS_ONLY_PATHS/);
+  assert.match(source, /PATHS\[name\] \?\? CSS_ONLY_PATHS\[name\]/);
+  // And the one that motivated it must actually be in there.
+  const table = source.slice(
+    source.indexOf('const CSS_ONLY_PATHS'),
+    source.indexOf('const BOOT_NAMES'),
+  );
+  assert.match(table, /'menu':/, 'menu must be available to the snippet');
+});
+
 test('names kept out of the registry still reach the CSS snippet', () => {
   // `menu` and the navigation arrows are excluded from addIcon because
   // replacing their node broke the control (the phone toolbar button) or made
   // them worse. But they are still in icons.json, marked `jsSkip`, so the boot
   // snippet can mask them: CSS changes appearance without touching the DOM, so
   // it cannot break anything. That distinction is the whole design.
-  const boot = readFileSync(new URL('../kit/mv-icons-boot.ts', import.meta.url), 'utf8');
-  assert.match(boot, /lucide-menu/, 'menu must be styled by the snippet');
-  assert.ok(!source.includes(`'menu':`), 'menu must not be in the registry');
+  assert.match(source, /const CSS_ONLY_PATHS/, 'skipped names need a table of their own');
+  assert.ok(!registered.includes(`'menu':`), 'menu must not be in the registry');
 });
 
 test('every weight is selectable, and the boot CSS follows it', () => {
@@ -104,12 +124,12 @@ test('navigation arrows are deliberately left to Obsidian', () => {
   // out is a taste decision, not an oversight, so it is asserted rather than
   // left to drift back in on the next regeneration.
   for (const key of ['arrow-left', 'arrow-right']) {
-    assert.ok(!source.includes(`'${key}':`), `${key} must stay Obsidian's own`);
+    assert.ok(!registered.includes(`'${key}':`), `${key} must stay Obsidian's own`);
   }
   // `menu` is out for a different reason: the phone navbar's toolbar button
   // never resolved correctly and that bar cannot be inspected from a desktop.
   // A control that works beats a consistent icon.
-  assert.ok(!source.includes(`'menu':`), "menu must stay Obsidian's own");
+  assert.ok(!registered.includes(`'menu':`), "menu must not be registered");
 });
 
 test('covers the custom names Portal has hard-coded in its own call sites', () => {
