@@ -222,7 +222,26 @@ export class PortalSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Unified icon set')
       .setDesc(
-        'Re-skin Obsidian’s icons with the Material Symbols set, so the app’s own chrome and every plugin that draws an icon match. This reaches well beyond Portal — including your other plugins — so it is off by default. Both turning it on and turning it off take effect only after an app restart: icon overrides cannot be undone at runtime.',
+        createFragment((frag) => {
+          frag.appendText(
+            'Re-skin Obsidian’s icons with the Solar Bold Duotone set, so the app’s own chrome and every plugin that draws an icon match. This reaches well beyond Portal — including your other plugins — so it is off by default. Both turning it on and turning it off take effect only after an app restart: icon overrides cannot be undone at runtime. ',
+          );
+          // CC BY, unlike a permissive licence, requires the credit to travel
+          // with the artwork wherever it is displayed — so it belongs here, in
+          // front of anyone enabling the set, not only in the repository.
+          const credit = frag.createEl('span', { cls: 'portal-credit' });
+          credit.appendText('Icons by ');
+          credit.createEl('a', {
+            text: 'Solar Icon Set',
+            href: 'https://github.com/480-Design/Solar-Icon-Set',
+          });
+          credit.appendText(' (480 Design), licensed under ');
+          credit.createEl('a', {
+            text: 'CC BY 4.0',
+            href: 'https://creativecommons.org/licenses/by/4.0/',
+          });
+          credit.appendText('.');
+        }),
       )
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.mvIcons).onChange(async (value) => {

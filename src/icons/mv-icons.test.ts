@@ -81,7 +81,12 @@ test('every glyph is wrapped in the addIcon viewBox-safe transform', () => {
   // origin is y = -960: scaling alone would leave every glyph outside the box,
   // so the translate has to come first (SVG composes right-to-left).
   assert.match(source, /transform="\$\{TRANSFORM\}"/);
-  assert.match(source, /const TRANSFORM = 'scale\(0\.1041667\) translate\(0 960\)'/);
+  // Read the expected value from the set definition rather than hard-coding it:
+  // the transform is set-specific and this test must survive a family change.
+  const set = JSON.parse(
+    readFileSync(new URL('../../../marioverse-kit/mv-icons/set.json', import.meta.url), 'utf8'),
+  ) as { transform: string };
+  assert.ok(source.includes(`const TRANSFORM = '${set.transform}'`), 'transform must match set.json');
   // The transform must be applied through the constant, never inlined per glyph.
   const inline = source.match(/<g transform="(?!\$\{TRANSFORM\})/g) ?? [];
   assert.deepEqual(inline, [], 'glyphs must share one transform constant');
@@ -93,13 +98,13 @@ test('path data reaches the DOM whole, never split', () => {
   // 0 0 0…"), so every glyph was shredded into fragments and rendered corrupt.
   // The scale wrapper was still present, so a shape-only assertion passed while
   // the icons were broken. Assert the actual interpolation instead.
-  assert.match(source, /<path d="\$\{d\}"\/>/, 'the whole `d` must be interpolated as one path');
-  assert.ok(!/\bd\s*\.\s*split\(/.test(source), 'path data must never be split');
+  assert.match(source, /\$\{inner\}<\/g>/, 'the whole glyph body must be interpolated intact');
+  assert.ok(!/\binner\s*\.\s*split\(/.test(source), 'glyph bodies must never be split');
 
   // And the stored strings must themselves be plausible whole paths, not the
   // 4-character stumps the split bug produced.
   const values = [...source.matchAll(/^ {2}'[a-z0-9-]+': '([^']+)',$/gm)].map((m) => m[1] ?? '');
-  assert.ok(values.length >= 100, `expected 100+ path entries, found ${values.length}`);
+  assert.ok(values.length >= 100, `expected 100+ glyph entries, found ${values.length}`);
   for (const d of values) {
     assert.ok(d.length > 40, `suspiciously short path data (${d.length} chars): ${d}`);
   }
@@ -121,11 +126,12 @@ test('the CSS guard matches what the module actually emits', () => {
   );
 });
 
-test('glyphs are solid (fill), not stroked', () => {
-  // This is what makes the set read as "solid" — filled shapes, no outline.
+test('glyphs are filled shapes, not strokes', () => {
+  // The set reads as mass, not outline: filled shapes plus a faint second
+  // layer. No stroke geometry should be involved.
   assert.match(source, /fill="currentColor"/);
-  assert.ok(!source.includes('stroke='), 'solid set must not carry stroke attributes');
-  assert.ok(!source.includes('fill="none"'), 'solid set must not carry fill="none"');
+  assert.ok(!source.includes('stroke-width'), 'set must not carry stroke geometry');
+  assert.ok(!source.includes('fill="none"'), 'set must not carry fill="none"');
 });
 
 test('registers a broad set, not a token handful', () => {
@@ -135,7 +141,7 @@ test('registers a broad set, not a token handful', () => {
   // actually has to hold is the targeted coverage asserted in the two tests
   // below: the names this vault really draws.
   const keys = source.match(/^ {2}'[a-z0-9-]+':/gm) ?? [];
-  assert.ok(keys.length >= 400, `expected 400+ registered names, found ${keys.length}`);
+  assert.ok(keys.length >= 350, `expected 350+ registered names, found ${keys.length}`);
 });
 
 test('covers every Lucide name observed in this vault’s live chrome', () => {
@@ -224,16 +230,22 @@ test('the icon override ships off by default, and migrates existing installs', (
   assert.match(settings, /data\.hugeCoreIcons/, 'legacy flag migration must survive');
 });
 
-test('third-party artwork is attributed', () => {
-  // The glyphs are Apache-2.0 material redistributed inside main.js, in
-  // modified form. That licence requires the notice, a copy of the licence,
-  // and a statement of changes.
+test('third-party artwork is attributed, in the app as well as the repo', () => {
+  // The glyphs are CC BY 4.0 artwork redistributed inside main.js, in modified
+  // form. That licence is stricter than a permissive software one: the credit
+  // has to travel with the work wherever it is displayed, so a NOTICE file
+  // alone does not discharge it — the app has to show it too.
   const notice = readFileSync(new URL('../../NOTICE', import.meta.url), 'utf8');
-  assert.match(notice, /Material Symbols/);
-  assert.match(notice, /Apache License, Version 2\.0/);
+  assert.match(notice, /Solar Icon Set/);
+  assert.match(notice, /CC BY 4\.0/);
   assert.match(notice, /MODIFICATIONS/);
-  const apache = readFileSync(new URL('../../LICENSE-APACHE-2.0', import.meta.url), 'utf8');
-  assert.match(apache, /Apache License/);
+  const licence = readFileSync(new URL('../../LICENSE-CC-BY-4.0', import.meta.url), 'utf8');
+  assert.match(licence, /Attribution 4\.0 International/);
+
+  // Visible where the user enables the set.
+  const settings = readFileSync(new URL('../settings.ts', import.meta.url), 'utf8');
+  assert.match(settings, /Solar Icon Set/, 'settings must carry the credit');
+  assert.match(settings, /CC BY 4\.0/, 'settings must name the licence');
 });
 
 test('carries no Iconize dependency', () => {

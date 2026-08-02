@@ -26,14 +26,30 @@ const SET = JSON.parse(
     new URL('../../../marioverse-kit/mv-icons/set.json', import.meta.url),
     'utf8',
   ),
-) as { viewBox: string; transform: string; name: string };
+) as { viewBox: string; transform: string; name: string; multiPath?: boolean };
 
-/** Every `'name': 'path'` pair the generated module declares. */
+/** Every `'name': 'body'` pair the generated module declares. The value is the
+ *  glyph's whole SVG body — one or more `<path>` elements — not a bare `d`
+ *  attribute: duotone glyphs are several paths at different opacities. */
 function glyphs(): Array<[string, string]> {
   return [...MODULE.matchAll(/^ {2}'([a-z0-9-]+)': '([^']+)',$/gm)].map((m) => [
     m[1] ?? '',
     m[2] ?? '',
   ]);
+}
+
+/** Every `d="…"` inside a glyph body. */
+function pathData(body: string): string[] {
+  return [...body.matchAll(/\sd="([^"]+)"/g)].map((m) => m[1] ?? '');
+}
+
+/** How many drawing elements a glyph body contains.
+ *
+ *  Not every glyph is made of `<path>`: Solar draws `users` out of `<circle>`
+ *  and `<ellipse>`, which is perfectly valid SVG. Counting paths alone would
+ *  report a real glyph as empty. */
+function drawables(body: string): number {
+  return (body.match(/<(?:path|circle|ellipse|rect|polygon|polyline|line|use)\b/g) ?? []).length;
 }
 
 /** The transform the module will actually apply, read from the module itself
@@ -98,44 +114,76 @@ test('a transform missing its translate would be caught', () => {
   assert.ok(yTop < -1, 'without the translate the glyph should fall outside the box');
 });
 
-test('glyph coordinates stay inside the grid the set declares', () => {
+test('glyph start points sit inside the grid the set declares', () => {
   // Catches a mapping built against a different grid: the path data would be
   // numerically out of range for the viewBox, and every glyph would be clipped
   // or wildly out of scale.
+  //
+  // Only the opening absolute moveto is checked, on purpose. Every other number
+  // in a path may be a RELATIVE delta — lowercase commands carry offsets, which
+  // are routinely negative and smaller than the grid. Reading them as absolute
+  // coordinates makes the assertion meaningless: it happened to pass on a
+  // 960-unit grid, where deltas are small next to the range, and started firing
+  // on a 24-unit one. Anything more than this needs a real path parser.
   const [minX, minY, w, h] = SET.viewBox.split(/\s+/).map(Number) as [
     number,
     number,
     number,
     number,
   ];
-  // Generous slack: stroke joins and control points legitimately overshoot.
   const slack = Math.max(w, h) * 0.15;
-  const lo = Math.min(minX, minY) - slack;
-  const hi = Math.max(minX + w, minY + h) + slack;
+  const loX = minX - slack;
+  const hiX = minX + w + slack;
+  const loY = minY - slack;
+  const hiY = minY + h + slack;
 
   const offenders: string[] = [];
-  for (const [name, d] of glyphs()) {
-    for (const raw of d.match(/-?\d*\.?\d+(?:e-?\d+)?/g) ?? []) {
-      const n = Number(raw);
-      if (n < lo || n > hi) {
-        offenders.push(`${name}: ${n}`);
-        break;
-      }
+  for (const [name, body] of glyphs()) {
+    for (const d of pathData(body)) {
+      const m = /^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/.exec(d);
+      if (!m) continue; // relative opening moveto — no absolute anchor to check
+      const x = Number(m[1]);
+      const y = Number(m[2]);
+      if (x < loX || x > hiX || y < loY || y > hiY) offenders.push(`${name}: ${x},${y}`);
     }
   }
-  assert.deepEqual(offenders.slice(0, 5), [], `coordinates outside the declared grid`);
+  assert.deepEqual(offenders.slice(0, 5), [], 'start points outside the declared grid');
 });
 
-test('every glyph is a syntactically plausible path', () => {
+test('every glyph actually draws something', () => {
   const bad: string[] = [];
-  for (const [name, d] of glyphs()) {
-    // Must open with a moveto, and carry only legal path characters.
-    if (!/^[Mm]/.test(d)) bad.push(`${name}: does not start with a moveto`);
-    else if (/[^MmLlHhVvCcSsQqTtAaZz0-9eE.,\-+\s]/.test(d)) bad.push(`${name}: illegal character`);
-    // The shredding bug produced 4-character stumps like "M208".
-    else if (d.length < 40) bad.push(`${name}: implausibly short (${d.length} chars)`);
+  for (const [name, body] of glyphs()) {
+    if (drawables(body) === 0) {
+      bad.push(`${name}: no drawing elements at all`);
+      continue;
+    }
+    for (const d of pathData(body)) {
+      // A path must open with a moveto and carry only legal path characters.
+      if (!/^[Mm]/.test(d)) bad.push(`${name}: a path does not start with a moveto`);
+      else if (/[^MmLlHhVvCcSsQqTtAaZz0-9eE.,\-+\s]/.test(d)) bad.push(`${name}: illegal char`);
+    }
+    // The shredding bug produced 4-character stumps like "M208". Glyphs built
+    // from primitives have no `d` at all, so they are judged on body length.
+    if (body.length < 60) bad.push(`${name}: implausibly short body`);
   }
   assert.deepEqual(bad.slice(0, 5), []);
+});
+
+test('the set is genuinely duotone, not flattened to one layer', () => {
+  // The whole point of this family is the second, faint layer under the solid
+  // shape. A mapping that silently took the `bold` variant instead would pass
+  // every other check here while losing the look entirely.
+  if (!SET.multiPath) return;
+  const all = glyphs();
+  const layered = all.filter(([, body]) => drawables(body) > 1);
+  const ratio = layered.length / all.length;
+  assert.ok(ratio > 0.8, `expected most glyphs to be layered, got ${(ratio * 100) | 0}%`);
+  // And the faint layer must actually be faint.
+  const faint = all.filter(([, body]) => /opacity="[.0]/.test(body));
+  assert.ok(
+    faint.length > all.length * 0.8,
+    `expected most glyphs to carry a reduced-opacity layer, got ${faint.length}/${all.length}`,
+  );
 });
 
 test('distinct concepts do not collapse onto one glyph', () => {

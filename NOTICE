@@ -1,44 +1,54 @@
 Portal
 Copyright (c) 2026 Mario Miletta
 
-This product includes software developed by third parties, listed below.
+This product includes artwork created by third parties, listed below.
 
 --------------------------------------------------------------------------------
-Material Symbols
+Solar Icon Set  —  ATTRIBUTION REQUIRED
 --------------------------------------------------------------------------------
 
-Portal's unified icon set (`src/kit/mv-icons.ts`) embeds glyph path data from
-Material Symbols, the icon library published by Google.
+Portal's unified icon set (`src/kit/mv-icons.ts`) embeds glyphs from the Solar
+Icon Set, in the "Bold Duotone" style.
 
-    Source:   https://github.com/google/material-design-icons
-    Package:  @material-symbols/svg-400 (rounded style, filled variant)
-    License:  Apache License, Version 2.0
-    Copyright (c) Google LLC
+    Icons:    Solar Icon Set by 480 Design
+    Source:   https://github.com/480-Design/Solar-Icon-Set
+    Package:  @iconify-json/solar (variant: -bold-duotone)
+    License:  Creative Commons Attribution 4.0 International (CC BY 4.0)
+              https://creativecommons.org/licenses/by/4.0/
 
-A copy of the Apache License, Version 2.0 is included in this repository as
-LICENSE-APACHE-2.0, and is also available at:
+CC BY 4.0 requires attribution wherever these icons are distributed or
+displayed. Unlike a permissive software licence, this obligation cannot be
+dropped: it travels with the artwork. A copy of the licence is included in this
+repository as LICENSE-CC-BY-4.0.
 
-    http://www.apache.org/licenses/LICENSE-2.0
+The required credit line is:
+
+    Icons by Solar Icon Set (480 Design), licensed under CC BY 4.0.
+
+It appears in this file, in the plugin's README, and in Portal's settings tab
+next to the icon-set toggle — so it is visible to anyone who turns the feature
+on, not only to those who read the repository.
 
 MODIFICATIONS
 -------------
 
 The glyphs are redistributed in modified form. Specifically:
 
-  1. Each glyph's `<path>` data is extracted from its source SVG file and
-     embedded as a string literal, rather than shipped as an .svg asset.
+  1. Each glyph's SVG body is embedded as a string literal rather than shipped
+     as an .svg asset. The body is kept whole, including the reduced-opacity
+     layer that gives the set its duotone character.
 
-  2. Each glyph is wrapped in a transform that maps Material's native 960-unit
-     grid (viewBox "0 -960 960 960") onto the fixed "0 0 100 100" viewBox that
-     Obsidian's addIcon() API imposes:
+  2. Each glyph is wrapped in a transform that maps Solar's native 24-unit grid
+     onto the fixed "0 0 100 100" viewBox that Obsidian's addIcon() API
+     imposes:
 
-         <g transform="scale(0.1041667) translate(0 960)" fill="currentColor">
+         <g data-mv-icon transform="scale(4.1666667)" fill="currentColor">
 
-     The glyph outlines themselves are unaltered.
+     The glyph outlines and their opacities are unaltered.
 
-  3. Glyphs are indexed under Lucide icon names rather than their Material
-     names, so that they resolve through Obsidian's existing icon registry.
-     The name mapping (for example `trash` to Material's `delete`, `brain` to
-     `psychology`) is Portal's own and is not part of Material Symbols.
+  3. Glyphs are indexed under Lucide icon names rather than their Solar names,
+     so they resolve through Obsidian's existing icon registry. The name
+     mapping (for example `search` to Solar's `magnifer`, `brain` to `cpu`) is
+     Portal's own and is not part of the Solar Icon Set.
 
 No other changes were made to the artwork.
