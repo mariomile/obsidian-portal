@@ -687,7 +687,7 @@ body.is-phone .portal-section-header {
 }
 
 /* --- phone chrome: drawer tab bar ------------------------------------------
-   The pill bar mounted at the top of the right drawer, driving Obsidian's own
+   The pill bar mounted at the top of each drawer, driving Obsidian's own
    drawer tabs. Reuses .portal-phone-navbar's geometry wholesale — same class,
    same 3-slice capsule — and only changes where it sits: inside a drawer that
    already pads for the safe area, so no inset of its own. */

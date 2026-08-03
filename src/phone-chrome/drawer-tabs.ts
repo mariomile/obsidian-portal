@@ -42,6 +42,10 @@ interface Mounted {
   signature: string;
   /** Torn down with the bar; see `attachGesture`. */
   detachGesture: () => void;
+  /** True while this drawer's gesture is mid-drag. Per-entry, not a module
+   *  flag, so the two drawers stay independent: `syncSide` reads its own
+   *  side's value and never blocks on the other drawer's drag. */
+  isDragging: () => boolean;
 }
 
 export function installDrawerTabs(plugin: PortalPlugin): () => void {
@@ -116,7 +120,11 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
    * that scrolls horizontally inside a drawer (Bases tables) can no longer be
    * scrolled sideways while this is on.
    */
-  const attachGesture = (side: Side, host: HTMLElement, count: number): (() => void) => {
+  const attachGesture = (
+    side: Side,
+    host: HTMLElement,
+    count: number,
+  ): { detach: () => void; isDragging: () => boolean } => {
     let startX = 0;
     let startY = 0;
     let lastX = 0;
@@ -128,8 +136,26 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
     let from = 0;
 
     const onStart = (evt: TouchEvent): void => {
+      // A second finger mid-drag, or a touchstart while the previous touch's
+      // cycle has not reached 'idle' yet, is not a fresh gesture: release
+      // rather than re-seed on the newcomer, which would freeze the pill and
+      // then jump it on re-claim.
+      if (evt.touches.length > 1 || state !== 'idle') {
+        state = 'released';
+        return;
+      }
       const touch = evt.touches[0];
       if (!touch) return;
+      // A touch starting ON the bar is a tap on a pill, not a page drag —
+      // release immediately so a wobbly thumb doesn't swallow the tap.
+      // (Without this, >8px of horizontal jitter makes `onMove` call
+      // `preventDefault()`, which per the Touch Events spec suppresses the
+      // compatibility `click`, so `PhoneChromeNavbar.onSelect` never fires.)
+      const target = evt.target;
+      if (target instanceof Element && target.closest('.portal-phone-navbar')) {
+        state = 'released';
+        return;
+      }
       startX = touch.clientX;
       startY = touch.clientY;
       lastX = touch.clientX;
@@ -213,15 +239,24 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
     host.addEventListener('touchend', onEnd, { passive: true });
     host.addEventListener('touchcancel', onEnd, { passive: true });
 
-    return () => {
-      host.removeEventListener('touchstart', onStart);
-      host.removeEventListener('touchmove', onMove);
-      host.removeEventListener('touchend', onEnd);
-      host.removeEventListener('touchcancel', onEnd);
+    return {
+      detach: () => {
+        host.removeEventListener('touchstart', onStart);
+        host.removeEventListener('touchmove', onMove);
+        host.removeEventListener('touchend', onEnd);
+        host.removeEventListener('touchcancel', onEnd);
+      },
+      isDragging: () => state === 'dragging',
     };
   };
 
   const syncSide = (side: Side): void => {
+    // Nothing in the drag path calls back into Obsidian, so only an external
+    // layout-change/resize could land here mid-gesture. Guarding is cheap and
+    // makes it airtight: a re-render would set `is-animating` and re-read
+    // layout out from under the touch handler's cached numbers.
+    if (mounted.get(side)?.isDragging()) return;
+
     const leaves = drawerLeaves(side);
     const tabs = tabsOf(leaves);
 
@@ -261,8 +296,14 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
         navbar.render(clampTabIndex(index, tabs.length));
         goToTab(side, index);
       };
-      const detachGesture = attachGesture(side, host, tabs.length);
-      mounted.set(side, { navbar, host, signature, detachGesture });
+      const gesture = attachGesture(side, host, tabs.length);
+      mounted.set(side, {
+        navbar,
+        host,
+        signature,
+        detachGesture: gesture.detach,
+        isDragging: gesture.isDragging,
+      });
     }
 
     mounted.get(side)?.navbar.render(activeIndexOf(side, tabs.length));

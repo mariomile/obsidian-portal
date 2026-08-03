@@ -288,7 +288,7 @@ export class PortalSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Drawer tab bar')
       .setDesc(
-        'Phone only. Adds a pill bar at the top of the right sidebar that switches ' +
+        'Phone only. Adds a pill bar at the top of each drawer that switches ' +
           'its tabs in one tap, instead of pressing and sliding the native selector. ' +
           'Shows whatever tabs are actually in there — nothing to configure.',
       )
