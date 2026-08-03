@@ -1,5 +1,5 @@
 /**
- * Pill geometry for the phone hub navbar — pure, no DOM.
+ * Pill geometry for the phone drawer tab bar — pure, no DOM.
  *
  * The bar is a constant-width row: collapsed slots are icon-only, and the
  * single expanded slot absorbs whatever is left over. During a swipe the
@@ -29,8 +29,8 @@ export interface PillLayoutInput {
   progress: number;
   /**
    * Index the gesture is heading toward. Defaults to the adjacent slot in the
-   * progress direction; the pager passes it explicitly when it skips a
-   * disabled or tap-only slot.
+   * progress direction; a caller passes it explicitly to land the pill on a
+   * non-adjacent slot instead.
    */
   targetIndex?: number;
   /** px available inside the bar's content box. */

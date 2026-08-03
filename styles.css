@@ -604,10 +604,6 @@ body.is-phone .portal-section-header {
   color: var(--text-normal);
 }
 
-.portal-phone-slot.is-disabled {
-  color: var(--text-faint);
-}
-
 /* 3-slice capsule wash. The wrapper only fades; its slices only transform. */
 .portal-phone-slot-bg {
   position: absolute;

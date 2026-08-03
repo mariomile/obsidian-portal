@@ -30,7 +30,7 @@ const FILE_EXPLORER_TYPE = 'file-explorer';
  */
 export default class PortalPlugin extends Plugin {
   settings: PortalSettings = DEFAULT_SETTINGS;
-  /** Re-syncs the right-drawer tab bar — a no-op on desktop. Exposed so the
+  /** Re-syncs the drawer tab bars — a no-op on desktop. Exposed so the
    *  settings tab's `drawerTabs` toggle can apply live instead of waiting
    *  for the next layout-change/active-leaf-change. Assigned in `onload()`. */
   syncDrawerTabs: () => void = () => {};
@@ -105,7 +105,7 @@ export default class PortalPlugin extends Plugin {
     // Phone-only: header top-left goes Back (falls back to opening the menu).
     installMobileHeaderBack(this);
 
-    // Phone-only: pill bar over the right drawer's native tabs (default off).
+    // Phone-only: pill bar over each drawer's native tabs (default off).
     this.syncDrawerTabs = installDrawerTabs(this);
 
     // Re-apply the hide whenever the layout changes, so a file-explorer leaf

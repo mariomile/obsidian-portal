@@ -56,7 +56,7 @@ test('negative progress expands the previous slot', () => {
   assert.equal(pills[1]?.width, 40);
 });
 
-test('an explicit targetIndex lets the pill skip a non-pageable slot', () => {
+test('an explicit targetIndex lets the pill land on a non-adjacent slot', () => {
   const pills = layoutPills({ ...base, progress: 0.5, targetIndex: 3 });
   assert.equal(pills[1]?.width, 40 + 108);
   assert.equal(pills[3]?.width, 40 + 108);

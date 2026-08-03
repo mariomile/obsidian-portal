@@ -56,9 +56,18 @@ so a failure degrades to the previous behaviour rather than trapping the user.
 
 **Tap** a pill → `selectTabIndex(index)` → that section becomes active.
 
-**Swipe** horizontally **anywhere in the drawer, including over content**. While
-the finger moves, only the pill tracks it — sliding and expanding toward the
-neighbouring section. The content does not move.
+**Swipe** horizontally **anywhere in the drawer's content**. While the finger
+moves, only the pill tracks it — sliding and expanding toward the neighbouring
+section. The content does not move.
+
+**Accepted trade:** a touch starting on the bar itself is treated as a tap, not
+a swipe, so it never claims the drag — a wobbly thumb landing on a pill selects
+that pill instead of accidentally swiping past it. This means swipe does not
+work when started over the bar, contrary to the original "anywhere in the
+drawer" framing above. Tap reliability on the bar was chosen over swipe on the
+bar: the bar is a small, precise target, and a tap that silently turns into a
+half-swipe would be a worse failure than a swipe gesture that simply has to
+start a few pixels lower, over the content.
 
 This is a deliberate departure from the original spec's live paging, forced by a
 verified constraint: **Obsidian renders only the active drawer tab**

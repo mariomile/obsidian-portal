@@ -1,5 +1,8 @@
 /**
- * Gesture arbitration for the phone hub pager — pure, no DOM.
+ * Gesture arbitration for the phone drawer tab bar's swipe — pure, no DOM.
+ * `drawer-tabs.ts` wires these into its own `touchstart`/`touchmove`/
+ * `touchend` listeners on the drawer host; this module carries no listener
+ * or edge logic of its own, only the two decisions below.
  *
  * Two decisions at two moments:
  *
@@ -7,19 +10,7 @@
  *   `ignore` the caller stops asking for the rest of that touch: a direction
  *   lock taken once is what keeps vertical scrolling smooth. `pending` means
  *   the finger has not travelled far enough to tell yet.
- * - `decideSnap` runs on `touchend` and says where the pager lands.
- *
- * Listener placement is the caller's choice (`scope`), because it is what the
- * spike's Question B settles:
- *
- * - `scope: document` + `capture` — the pager sees the touch before
- *   Obsidian's drawer handler and swallows it. Full-width swipe, no dead
- *   zone. This is the preferred wiring.
- * - `scope: host` — the fallback when Obsidian also captures on `document`.
- *   A separate listener on the caller's side then guards the bezel.
- *
- * Either way this class carries NO edge logic: it claims the horizontal
- * drags it is handed, and where they come from is somebody else's problem.
+ * - `decideSnap` runs on `touchend` and says which tab the drawer lands on.
  */
 
 export type ClaimDecision = 'pending' | 'claim' | 'ignore';

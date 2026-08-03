@@ -1,8 +1,21 @@
 import { setIcon } from 'obsidian';
 import { layoutPills } from './pill-geometry';
 
+/** What the bar needs to draw one pill. Owned here, not by a registry: this
+ *  is the navbar's input contract, and the drawer tabs that feed it have no
+ *  notion of being enabled or unreachable — every tab in a drawer is real. */
+export interface NavbarSlot {
+  /** Stable id, written to `data-slot` for styling and diagnostics. */
+  id: string;
+  /** Icon id passed to Obsidian's `setIcon`. */
+  icon: string;
+  /** Label shown when this pill is the expanded, active one. */
+  label: string;
+}
+
 /**
- * The phone hub navbar: a constant-width segmented row where only the active
+ * The segmented pill bar mounted at the top of each phone drawer, driving
+ * Obsidian's own drawer tabs: a constant-width row where only the active
  * slot carries a label.
  *
  * Fluidity contract (the reason this file looks the way it does):
@@ -17,18 +30,6 @@ import { layoutPills } from './pill-geometry';
  *   gesture: `setProgress` runs on every touchmove and works exclusively
  *   from cached numbers.
  */
-/** What the bar needs to draw one pill. Owned here, not by a registry: this
- *  is the navbar's input contract, and the drawer tabs that feed it have no
- *  notion of being enabled or unreachable — every tab in a drawer is real. */
-export interface NavbarSlot {
-  /** Stable id, written to `data-slot` for styling and diagnostics. */
-  id: string;
-  /** Icon id passed to Obsidian's `setIcon`. */
-  icon: string;
-  /** Label shown when this pill is the expanded, active one. */
-  label: string;
-}
-
 export class PhoneChromeNavbar {
   /** Called when a slot is tapped. Wired by `drawer-tabs.ts`. */
   onSelect: (index: number) => void = () => {};

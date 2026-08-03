@@ -77,6 +77,16 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
       viewType: leaf.view.getViewType(),
     }));
 
+  /** The authoritative tab count for a drawer: `parent.children.length`, the
+   *  same value `selectDrawerTab` bounds an index against — not re-derived by
+   *  counting leaves. The two agree today only because a phone drawer is a
+   *  single tab group; this keeps that agreement from being incidental. */
+  const tabCountOf = (leaves: readonly WorkspaceLeaf[]): number => {
+    const first = leaves[0];
+    const parent = first ? drawerTabParentOf(first) : null;
+    return Array.isArray(parent?.children) ? parent.children.length : 0;
+  };
+
   /** Current tab index for a drawer, clamped. */
   const activeIndexOf = (side: Side, count: number): number => {
     const first = drawerLeaves(side)[0];
@@ -139,8 +149,11 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
       // A second finger mid-drag, or a touchstart while the previous touch's
       // cycle has not reached 'idle' yet, is not a fresh gesture: release
       // rather than re-seed on the newcomer, which would freeze the pill and
-      // then jump it on re-claim.
+      // then jump it on re-claim. If it interrupted an actual drag, the pill
+      // is left mid-morph and no `layout-change`/`active-leaf-change` fires
+      // for an aborted gesture — unwind it back to rest ourselves.
       if (evt.touches.length > 1 || state !== 'idle') {
+        if (state === 'dragging') mounted.get(side)?.navbar.setProgress(from, 0);
         state = 'released';
         return;
       }
@@ -259,9 +272,10 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
 
     const leaves = drawerLeaves(side);
     const tabs = tabsOf(leaves);
+    const count = tabCountOf(leaves);
 
     // One tab is not a bar; zero means the drawer is not built yet.
-    if (tabs.length < 2) {
+    if (count < 2) {
       unmount(side);
       return;
     }
@@ -293,10 +307,10 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
       host.addClass(DRAWER_CLASS);
       const navbar = new PhoneChromeNavbar(host, tabsToSlots(tabs), host.firstChild);
       navbar.onSelect = (index) => {
-        navbar.render(clampTabIndex(index, tabs.length));
+        navbar.render(clampTabIndex(index, count));
         goToTab(side, index);
       };
-      const gesture = attachGesture(side, host, tabs.length);
+      const gesture = attachGesture(side, host, count);
       mounted.set(side, {
         navbar,
         host,
@@ -306,7 +320,7 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
       });
     }
 
-    mounted.get(side)?.navbar.render(activeIndexOf(side, tabs.length));
+    mounted.get(side)?.navbar.render(activeIndexOf(side, count));
   };
 
   const sync = (): void => {
