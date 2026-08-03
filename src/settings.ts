@@ -9,11 +9,6 @@ import {
   parseSectionOrder,
   type PortalSectionKey,
 } from './section-config';
-import {
-  DEFAULT_PHONE_CHROME_SLOTS,
-  parsePhoneChromeSlots,
-  type PhoneChromeSlot,
-} from './phone-chrome/slots';
 
 export type SortMode = 'name' | 'modified' | 'created';
 
@@ -92,12 +87,6 @@ export interface PortalSettings {
    *  navigation history, and only opens the menu (its native behaviour) when
    *  there is nothing to go back to. Default ON. Applies live. */
   mobileHeaderBack: boolean;
-  /** Phone-only: replace the hub with a segmented navbar paged by horizontal
-   *  swipe. Default OFF — this takes over touch handling, so it must not
-   *  switch itself on across a synced vault. Applies live. */
-  phoneChrome: boolean;
-  /** The hub views the phone-chrome pager moves between, in bar order. */
-  phoneChromeSlots: PhoneChromeSlot[];
   /** Phone-only: a segmented pill bar at the top of the right drawer that
    *  switches its tabs in one tap, instead of Obsidian's press-and-slide
    *  selector. Reads the drawer's real tabs — nothing to configure. Additive:
@@ -125,8 +114,6 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   // user config, never defaults baked into the plugin.
   folderIcons: {},
   mobileHeaderBack: true,
-  phoneChrome: false,
-  phoneChromeSlots: [...DEFAULT_PHONE_CHROME_SLOTS],
   drawerTabs: false,
 };
 
@@ -203,11 +190,6 @@ export function parseSettings(raw: unknown): PortalSettings {
       typeof data.mobileHeaderBack === 'boolean'
         ? data.mobileHeaderBack
         : DEFAULT_SETTINGS.mobileHeaderBack,
-    phoneChrome:
-      typeof data.phoneChrome === 'boolean'
-        ? data.phoneChrome
-        : DEFAULT_SETTINGS.phoneChrome,
-    phoneChromeSlots: parsePhoneChromeSlots(data.phoneChromeSlots),
     drawerTabs:
       typeof data.drawerTabs === 'boolean' ? data.drawerTabs : DEFAULT_SETTINGS.drawerTabs,
   };
@@ -300,27 +282,6 @@ export class PortalSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.mobileHeaderBack = value;
             await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName('Phone hub navbar')
-      .setDesc(
-        'Phone only. Replaces the hub with a segmented navbar you page through by ' +
-          'swiping horizontally. While it is on, the edge-drag sidebars are disabled ' +
-          'at hub level — open them with the menu button instead.',
-      )
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.phoneChrome)
-          .onChange(async (value) => {
-            this.plugin.settings.phoneChrome = value;
-            await this.plugin.saveSettings();
-            // Apply live: without this, turning the toggle OFF leaves the
-            // navbar mounted and the pager's document-capture touch
-            // listeners swallowing touches until the next
-            // layout-change/active-leaf-change.
-            this.plugin.syncPhoneChrome();
           }),
       );
 

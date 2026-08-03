@@ -16,7 +16,7 @@
  *   Obsidian's drawer handler and swallows it. Full-width swipe, no dead
  *   zone. This is the preferred wiring.
  * - `scope: host` — the fallback when Obsidian also captures on `document`.
- *   A separate listener in hub-level.ts then guards the bezel.
+ *   A separate listener on the caller's side then guards the bezel.
  *
  * Either way this class carries NO edge logic: it claims the horizontal
  * drags it is handed, and where they come from is somebody else's problem.

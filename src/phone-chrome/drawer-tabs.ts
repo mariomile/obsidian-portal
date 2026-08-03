@@ -2,8 +2,7 @@ import { Platform } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
 import type PortalPlugin from '../main';
 import { drawerTabParentOf, selectDrawerTab } from '../obsidian-internals';
-import type { ResolvedSlot } from './hub-registry';
-import { PhoneChromeNavbar } from './navbar';
+import { PhoneChromeNavbar, type NavbarSlot } from './navbar';
 
 /**
  * Phone-only: a segmented pill bar at the top of the right drawer, driving
@@ -47,20 +46,13 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
     return leaves;
   };
 
-  /** Tabs as the bar renders them. `enabled`/`pageable` are both true: every
-   *  drawer tab is real and reachable by definition — the fields exist only
-   *  because `PhoneChromeNavbar` is shared with the hub bar, which needs
-   *  them. */
-  const tabsAsSlots = (leaves: WorkspaceLeaf[]): ResolvedSlot[] =>
+  /** Tabs as the bar renders them. Read live from the drawer, so the bar can
+   *  only ever show sections that are actually in there. */
+  const tabsAsSlots = (leaves: WorkspaceLeaf[]): NavbarSlot[] =>
     leaves.map((leaf, i) => ({
-      slot: {
-        id: `drawer-${i}`,
-        icon: leaf.view.getIcon(),
-        label: leaf.view.getDisplayText(),
-        viewType: leaf.view.getViewType(),
-      },
-      enabled: true,
-      pageable: true,
+      id: `drawer-${i}`,
+      icon: leaf.view.getIcon(),
+      label: leaf.view.getDisplayText(),
     }));
 
   /** Changes whenever the drawer's tab set changes, so a remount happens on

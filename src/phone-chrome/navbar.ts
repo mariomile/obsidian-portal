@@ -1,6 +1,5 @@
 import { setIcon } from 'obsidian';
 import { layoutPills } from './pill-geometry';
-import type { ResolvedSlot } from './hub-registry';
 
 /**
  * The phone hub navbar: a constant-width segmented row where only the active
@@ -18,8 +17,20 @@ import type { ResolvedSlot } from './hub-registry';
  *   gesture: `setProgress` runs on every touchmove and works exclusively
  *   from cached numbers.
  */
+/** What the bar needs to draw one pill. Owned here, not by a registry: this
+ *  is the navbar's input contract, and the drawer tabs that feed it have no
+ *  notion of being enabled or unreachable — every tab in a drawer is real. */
+export interface NavbarSlot {
+  /** Stable id, written to `data-slot` for styling and diagnostics. */
+  id: string;
+  /** Icon id passed to Obsidian's `setIcon`. */
+  icon: string;
+  /** Label shown when this pill is the expanded, active one. */
+  label: string;
+}
+
 export class PhoneChromeNavbar {
-  /** Called when a slot is tapped. Wired by `hub-level.ts`. */
+  /** Called when a slot is tapped. Wired by `drawer-tabs.ts`. */
   onSelect: (index: number) => void = () => {};
 
   private readonly el: HTMLElement;
@@ -45,16 +56,15 @@ export class PhoneChromeNavbar {
    */
   constructor(
     host: HTMLElement,
-    private readonly resolved: ResolvedSlot[],
+    private readonly slots: NavbarSlot[],
     anchor?: Node | null,
   ) {
     this.el = host.createDiv({ cls: 'portal-phone-navbar' });
     if (anchor && anchor.parentNode === host) host.insertBefore(this.el, anchor);
 
-    this.resolved.forEach((entry, index) => {
+    this.slots.forEach((slot, index) => {
       const slotEl = this.el.createDiv({ cls: 'portal-phone-slot' });
-      slotEl.dataset.slot = entry.slot.id;
-      slotEl.toggleClass('is-disabled', !entry.enabled);
+      slotEl.dataset.slot = slot.id;
 
       // 3-slice capsule background, behind the icon. The left cap is static
       // (parked at x:0 in CSS); only the middle and right cap ever move.
@@ -65,14 +75,12 @@ export class PhoneChromeNavbar {
       this.bgEls.push(bgEl);
 
       const iconEl = slotEl.createDiv({ cls: 'portal-phone-slot-icon' });
-      setIcon(iconEl, entry.slot.icon);
+      setIcon(iconEl, slot.icon);
 
       const labelEl = slotEl.createDiv({ cls: 'portal-phone-slot-label' });
-      labelEl.setText(entry.slot.label);
+      labelEl.setText(slot.label);
 
-      if (entry.enabled) {
-        slotEl.addEventListener('click', () => this.onSelect(index));
-      }
+      slotEl.addEventListener('click', () => this.onSelect(index));
 
       this.slotEls.push(slotEl);
       this.labelEls.push(labelEl);
@@ -80,10 +88,10 @@ export class PhoneChromeNavbar {
   }
 
   /** Snap the bar to a settled state (mount, tap, or post-gesture). The ONLY
-   *  place that reads layout — gesture frames reuse what this cached. The bar
-   *  exists only at hub level (see hub-level.ts), so `activeIndex` is always
-   *  a real, currently-active slot here — there is no detached/collapsed
-   *  state to render. */
+   *  place that reads layout — gesture frames reuse what this cached. The
+   *  drawer bar only ever mounts once its drawer has real tabs, so
+   *  `activeIndex` is always a real, currently-active slot here — there is
+   *  no detached/collapsed state to render. */
   render(activeIndex: number): void {
     this.barWidth = this.el.clientWidth;
     if (this.barWidth > 0) {

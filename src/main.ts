@@ -6,7 +6,6 @@ import { installBootSnippet } from './icons/boot-snippet';
 import { installMobileHeaderBack } from './nav/mobile-header-back';
 import { installNoteEnter } from './nav/note-enter';
 import { installDrawerTabs } from './phone-chrome/drawer-tabs';
-import { installPhoneChrome } from './phone-chrome/hub-level';
 import { installTabDedupe } from './nav/tab-dedupe';
 import { PortalView, PORTAL_VIEW_TYPE } from './portal-view';
 import {
@@ -31,13 +30,9 @@ const FILE_EXPLORER_TYPE = 'file-explorer';
  */
 export default class PortalPlugin extends Plugin {
   settings: PortalSettings = DEFAULT_SETTINGS;
-  /** Re-syncs the phone hub chrome against current settings/workspace state
-   *  — a no-op on desktop. Exposed so the settings tab's `phoneChrome`
-   *  toggle can apply live instead of waiting for the next
-   *  layout-change/active-leaf-change. Assigned in `onload()`. */
-  syncPhoneChrome: () => void = () => {};
-  /** Re-syncs the right-drawer tab bar — a no-op on desktop. Same reason as
-   *  `syncPhoneChrome`: the settings toggle must apply live. */
+  /** Re-syncs the right-drawer tab bar — a no-op on desktop. Exposed so the
+   *  settings tab's `drawerTabs` toggle can apply live instead of waiting
+   *  for the next layout-change/active-leaf-change. Assigned in `onload()`. */
   syncDrawerTabs: () => void = () => {};
 
   async onload(): Promise<void> {
@@ -109,9 +104,6 @@ export default class PortalPlugin extends Plugin {
 
     // Phone-only: header top-left goes Back (falls back to opening the menu).
     installMobileHeaderBack(this);
-
-    // Phone-only: segmented hub navbar with a swipe pager (default off).
-    this.syncPhoneChrome = installPhoneChrome(this);
 
     // Phone-only: pill bar over the right drawer's native tabs (default off).
     this.syncDrawerTabs = installDrawerTabs(this);
@@ -243,13 +235,6 @@ export default class PortalPlugin extends Plugin {
   private async activateView(reveal = true): Promise<void> {
     const { workspace } = this.app;
     const existing = workspace.getLeavesOfType(PORTAL_VIEW_TYPE);
-    // Phone-chrome's hub navbar can now lazily create a SECOND `portal`
-    // leaf in the workspace root split (its "Files" slot, created on tap —
-    // see phone-chrome/hub-level.ts) alongside this method's own sidebar
-    // leaf. `getLeavesOfType` enumerates the root split first, so blindly
-    // taking `existing[0]` would reveal the hub's main-area leaf instead of
-    // the sidebar rail after a single hub tap — a phone-only feature
-    // silently regressing this desktop (and ribbon/command) affordance.
     // Select the sidebar leaf specifically, regardless of enumeration order.
     const sidebarLeaf = existing.find(
       (l) => l.getRoot() === workspace.leftSplit || l.getRoot() === workspace.rightSplit,

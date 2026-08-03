@@ -676,42 +676,12 @@ body.is-phone .portal-section-header {
   transition: opacity var(--portal-wash-motion);
 }
 
-/* --- phone chrome: hub container -------------------------------------------
-   The pager borrows Obsidian's own mobile tab container rather than building
-   one. `pan-y` leaves vertical scrolling to the browser and horizontal drags
-   to the pager; `.portal-phone-peek` is the sibling leaf we reveal for the
-   duration of a gesture. */
-.portal-phone-hub {
-  touch-action: pan-y;
-  overflow: hidden;
-}
-
-.portal-phone-hub > .workspace-leaf.portal-phone-peek {
-  display: flex;
-}
-
-/* Layer promotion is GESTURE-SCOPED: two viewport-sized leaves with permanent
-   will-change would hold their textures in GPU memory for the whole session.
-   The class goes on at claim and comes off in the settle epilogue. */
-.portal-phone-hub > .workspace-leaf.portal-phone-dragging {
-  will-change: transform;
-}
-
-/* Post-release glide to the resting position — the alternative is a
-   jump-cut the moment the finger lifts. The 350ms epilogue backstop in
-   hub-level.ts must stay ≥ this duration. */
-.portal-phone-hub > .workspace-leaf.portal-phone-settling {
-  transition: transform var(--cosmos-t-panel, 250ms)
-    var(--cosmos-native, cubic-bezier(0.22, 1, 0.36, 1));
-}
-
 @media (prefers-reduced-motion: reduce) {
   .portal-phone-navbar.is-animating .portal-phone-slot,
   .portal-phone-navbar.is-animating .portal-phone-pill-cap,
   .portal-phone-navbar.is-animating .portal-phone-pill-mid,
   .portal-phone-navbar.is-animating .portal-phone-slot-bg,
-  .portal-phone-navbar.is-animating .portal-phone-slot-label,
-  .portal-phone-hub > .workspace-leaf.portal-phone-settling {
+  .portal-phone-navbar.is-animating .portal-phone-slot-label {
     transition: none;
   }
 }
