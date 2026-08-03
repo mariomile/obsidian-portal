@@ -299,7 +299,7 @@ Run: `pnpm build`, then reload Obsidian on desktop and confirm nothing changed �
 
 ```bash
 git status --short
-git commit -- src/phone-chrome/ src/main.ts src/settings.ts styles.css -m "feat(phone-chrome)!: remove the hub navbar
+git commit -m "feat(phone-chrome)!: remove the hub navbar
 
 It never worked on device. All three defects — a neighbouring view that
 stayed invisible during the drag, taps landing on live content underneath,
@@ -310,7 +310,7 @@ The drawer tab bar replaces it, where Obsidian owns the swap.
 
 Removes hub-level, pager, hub-registry, slots and their tests, both settings,
 and the related CSS. navbar/pill-geometry/gesture-decide stay — the drawer
-bar uses them."
+bar uses them." -- src/phone-chrome/ src/main.ts src/settings.ts styles.css
 ```
 ---
 
@@ -460,11 +460,11 @@ Expected: PASS — all six `drawer-model.test.ts` tests green, every pre-existin
 
 ```bash
 git status --short
-git commit -- src/phone-chrome/drawer-model.ts src/phone-chrome/drawer-model.test.ts -m "feat(phone-chrome): pure drawer tab model
+git commit -m "feat(phone-chrome): pure drawer tab model
 
 tabsToSlots, tabsSignature and clampTabIndex are the three decisions in the
 drawer bar that do not need a live workspace. The signature keys on view
-types, not labels, so a view renaming itself cannot rebuild the bar mid-use."
+types, not labels, so a view renaming itself cannot rebuild the bar mid-use." -- src/phone-chrome/drawer-model.ts src/phone-chrome/drawer-model.test.ts
 ```
 
 ---
@@ -824,7 +824,7 @@ Expected: exit 0 — lint clean, all tests pass (including `style-contract.test.
 
 ```bash
 git status --short
-git commit -- src/phone-chrome/drawer-tabs.ts styles.css -m "feat(phone-chrome): drawer tab bar in both drawers, with swipe
+git commit -m "feat(phone-chrome): drawer tab bar in both drawers, with swipe
 
 Reads each drawer's real tabs and drives selectTabIndex — the same entry
 point Obsidian's native selector uses.
@@ -835,7 +835,7 @@ changes on release. Showing live content would mean mounting views Obsidian
 never built, which is what broke the hub navbar.
 
 Accepted regression: content that scrolls horizontally inside a drawer
-(Bases tables) can no longer be scrolled sideways while this is on."
+(Bases tables) can no longer be scrolled sideways while this is on." -- src/phone-chrome/drawer-tabs.ts styles.css
 ```
 
 ---
@@ -973,7 +973,7 @@ Create `docs/plans/2026-08-03-003-signoff.md` recording, for each of steps 3–6
 
 ```bash
 git status --short
-git commit -- docs/plans/2026-08-03-003-signoff.md -m "docs: drawer tab bar emulation sign-off"
+git commit -m "docs: drawer tab bar emulation sign-off" -- docs/plans/2026-08-03-003-signoff.md
 ```
 
 ---
