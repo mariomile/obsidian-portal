@@ -178,8 +178,10 @@ test('every glyph is wrapped in the addIcon viewBox-safe transform', () => {
   assert.match(source, /transform="\$\{TRANSFORM\}"/);
   // Read the expected value from the set definition rather than hard-coding it:
   // the transform is set-specific and this test must survive a family change.
+  // The copy lives beside the module (the generator writes both) rather than in
+  // the kit repo, which is only present on the machine that runs the generator.
   const set = JSON.parse(
-    readFileSync(new URL('../../../marioverse-kit/mv-icons/set.json', import.meta.url), 'utf8'),
+    readFileSync(new URL('../kit/mv-icons-set.json', import.meta.url), 'utf8'),
   ) as { transform: string };
   assert.ok(source.includes(`const TRANSFORM = '${set.transform}'`), 'transform must match set.json');
   // The transform must be applied through the constant, never inlined per glyph.

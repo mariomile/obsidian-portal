@@ -21,12 +21,16 @@ import test from 'node:test';
  * CI alongside everything else.
  */
 const MODULE = readFileSync(new URL('../kit/mv-icons.ts', import.meta.url), 'utf8');
-const SET = JSON.parse(
-  readFileSync(
-    new URL('../../../marioverse-kit/mv-icons/set.json', import.meta.url),
-    'utf8',
-  ),
-) as { viewBox: string; transform: string; name: string; multiPath?: boolean };
+/** The set the module was generated from, vendored beside it by the kit's
+ *  generator. It used to be read from `marioverse-kit/` as a sibling repo —
+ *  which exists on the machine that runs the generator and nowhere else, so
+ *  every test in this file died on ENOENT in CI. */
+const SET = JSON.parse(readFileSync(new URL('../kit/mv-icons-set.json', import.meta.url), 'utf8')) as {
+  viewBox: string;
+  transform: string;
+  name: string;
+  multiPath?: boolean;
+};
 
 /** Every `'name': 'body'` pair the generated module declares. The value is the
  *  glyph's whole SVG body — one or more `<path>` elements — not a bare `d`

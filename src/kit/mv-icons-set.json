@@ -1,0 +1,26 @@
+{
+  "name": "Solar",
+  "variant": "bold duotone",
+  "license": "CC-BY-4.0",
+  "attributionRequired": true,
+  "source": "@iconify-json/solar (variante -bold-duotone)",
+  "credit": "Solar Icons by 480 Design, CC BY 4.0",
+  "creditUrl": "https://github.com/480-Design/Solar-Icon-Set",
+  "viewBox": "0 0 24 24",
+  "transform": "scale(4.1666667)",
+  "transformWhy": "addIcon() forza viewBox 0 0 100 100. Solar disegna su una griglia 24 con origine 0, quindi basta scalare di 100/24 = 4.1666667 — nessun translate, a differenza di Material che parte da y = -960.",
+  "multiPath": true,
+  "multiPathWhy": "Il duotone è fatto di più path con opacità diverse: la campitura tenue sotto la forma piena. Per questo icons.json conserva il `body` SVG intero invece del solo attributo `d`.",
+  "secondarySet": {
+    "name": "MingCute",
+    "license": "Apache-2.0",
+    "source": "@iconify-json/mingcute (variante -fill)",
+    "creditUrl": "https://github.com/Richard9394/MingCute",
+    "covers": [
+      "plus",
+      "x",
+      "check"
+    ],
+    "why": "Solar non ha i simboli geometrici nudi: esistono solo add-circle, close-circle e check-circle, sempre dentro un contenitore che in duotone diventa un disco pieno. Per i comandi primari dell'interfaccia — il + della navbar, la x di chiusura — il risultato era una macchia invece di un segno. MingCute usa la stessa griglia 24, quindi questi tre condividono il medesimo transform senza alcun trattamento speciale."
+  }
+}
