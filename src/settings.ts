@@ -87,7 +87,7 @@ export interface PortalSettings {
    *  navigation history, and only opens the menu (its native behaviour) when
    *  there is nothing to go back to. Default ON. Applies live. */
   mobileHeaderBack: boolean;
-  /** Phone-only: a segmented pill bar at the top of the right drawer that
+  /** Phone-only: a segmented pill bar at the top of each mobile drawer that
    *  switches its tabs in one tap, instead of Obsidian's press-and-slide
    *  selector. Reads the drawer's real tabs — nothing to configure. Additive:
    *  the native selector stays. Default OFF. Applies live. */
