@@ -172,6 +172,15 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
     let from = 0;
 
     const onStart = (evt: TouchEvent): void => {
+      // Stop this touch from ever reaching Obsidian's own swipe-to-close: its
+      // listener sits on `workspace.containerEl`, an ancestor of every drawer,
+      // and fires on bubble. `data-ignore-swipe` asks it to bail once it runs
+      // — this makes sure it never runs at all for a touch that started here,
+      // which holds regardless of what its own bail-out checks do. Safe on a
+      // passive listener: `stopPropagation` is not restricted the way
+      // `preventDefault` is.
+      evt.stopPropagation();
+
       // A second finger mid-drag, or a touchstart while the previous touch's
       // cycle has not reached 'idle' yet, is not a fresh gesture: release
       // rather than re-seed on the newcomer, which would freeze the pill and
@@ -227,6 +236,7 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
 
       // Claimed: the browser must not also scroll or fire a native gesture.
       evt.preventDefault();
+      evt.stopPropagation();
 
       const progress = Math.max(-1, Math.min(1, -dx / width));
       const target = progress > 0 ? from + 1 : from - 1;
