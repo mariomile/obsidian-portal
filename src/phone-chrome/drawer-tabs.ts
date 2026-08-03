@@ -28,6 +28,28 @@ import { PhoneChromeNavbar } from './navbar';
  *  browser leaves horizontal drags to us and keeps vertical scrolling. */
 const DRAWER_CLASS = 'portal-drawer-tabs';
 
+/**
+ * Obsidian's own opt-out from its global mobile swipe, set on the host for as
+ * long as our bar owns it.
+ *
+ * `touch-action: pan-y` only tells the *browser* to stay out of a horizontal
+ * drag. Obsidian's swipe is not the browser: it listens on `window`, and the
+ * mobile drawer subscribes to the resulting `swipe` event to slide itself
+ * open/closed under the finger. Both gestures would fire on the same drag —
+ * the drawer visibly wins, so the tab never appears to change.
+ *
+ * Its producer walks up from the touch target and abandons the gesture at the
+ * first ancestor carrying this attribute; Obsidian sets it on its own tab
+ * selector for the same reason. On the host it covers every descendant, which
+ * is the whole drawer body.
+ *
+ * The cost is the swipe-to-close over the drawer *body*. The drawer header is
+ * a sibling of the host and keeps it, as does a tap on the backdrop, so the
+ * drawer is never trapped open. Two gestures cannot share one surface, and
+ * the tab swipe is the one this feature exists for.
+ */
+const IGNORE_SWIPE_ATTR = 'data-ignore-swipe';
+
 /** Which side a mounted bar belongs to. */
 type Side = 'left' | 'right';
 
@@ -42,6 +64,8 @@ interface Mounted {
   signature: string;
   /** Torn down with the bar; see `attachGesture`. */
   detachGesture: () => void;
+  /** Torn down with the bar; see `observeWidth`. */
+  detachResize: () => void;
   /** True while this drawer's gesture is mid-drag. Per-entry, not a module
    *  flag, so the two drawers stay independent: `syncSide` reads its own
    *  side's value and never blocks on the other drawer's drag. */
@@ -107,9 +131,11 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
   const unmount = (side: Side): void => {
     const entry = mounted.get(side);
     if (!entry) return;
+    entry.detachResize();
     entry.detachGesture();
     entry.navbar.destroy();
     entry.host.removeClass(DRAWER_CLASS);
+    entry.host.removeAttribute(IGNORE_SWIPE_ATTR);
     mounted.delete(side);
   };
 
@@ -263,6 +289,37 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
     };
   };
 
+  /**
+   * Re-render the bar when its drawer actually has a width.
+   *
+   * A collapsed drawer is `hide()`n, so at boot — the only moment both sides
+   * are synced — every host measures zero and `PhoneChromeNavbar.render`
+   * leaves the pills unpainted. Obsidian's `expand()` fires no workspace
+   * event: its only `requestResize` lives in `selectTabIndex`. So the bar
+   * used to stay invisible until the first tab change through the native
+   * selector, which is why a drawer the user merely opened looked empty.
+   *
+   * A `ResizeObserver` is the exact question being asked — "has my host got a
+   * box yet" — and it covers rotation and drawer-width changes for free.
+   * Width-only, so the bar's own height never feeds back into it.
+   */
+  const observeWidth = (side: Side, host: HTMLElement): (() => void) => {
+    let lastWidth = -1;
+    const observer = new ResizeObserver(() => {
+      const width = host.clientWidth;
+      if (width === lastWidth) return;
+      lastWidth = width;
+      if (width === 0) return;
+      const entry = mounted.get(side);
+      if (!entry || entry.isDragging()) return;
+      const count = tabCountOf(drawerLeaves(side));
+      if (count < 2) return;
+      entry.navbar.render(activeIndexOf(side, count));
+    });
+    observer.observe(host);
+    return () => observer.disconnect();
+  };
+
   const syncSide = (side: Side): void => {
     // Nothing in the drag path calls back into Obsidian, so only an external
     // layout-change/resize could land here mid-gesture. Guarding is cheap and
@@ -305,6 +362,7 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
 
     if (!mounted.has(side)) {
       host.addClass(DRAWER_CLASS);
+      host.setAttribute(IGNORE_SWIPE_ATTR, 'true');
       const navbar = new PhoneChromeNavbar(host, tabsToSlots(tabs), host.firstChild);
       navbar.onSelect = (index) => {
         navbar.render(clampTabIndex(index, count));
@@ -316,8 +374,12 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
         host,
         signature,
         detachGesture: gesture.detach,
+        detachResize: () => {},
         isDragging: gesture.isDragging,
       });
+      // After the entry exists: the observer's first callback reads it.
+      const entry = mounted.get(side);
+      if (entry) entry.detachResize = observeWidth(side, host);
     }
 
     mounted.get(side)?.navbar.render(activeIndexOf(side, count));
