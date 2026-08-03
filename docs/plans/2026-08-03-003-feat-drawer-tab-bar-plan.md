@@ -31,7 +31,7 @@
 
 ---
 
-### Task 1: Move the slot type into the navbar
+### Task 1: Move the slot type and delete the hub navbar
 
 **Files:**
 - Modify: `src/phone-chrome/navbar.ts`
@@ -41,7 +41,7 @@
 - Consumes: nothing.
 - Produces: `export interface NavbarSlot { id: string; icon: string; label: string }` in `navbar.ts`, and `PhoneChromeNavbar`'s constructor taking `NavbarSlot[]` instead of `ResolvedSlot[]`.
 
-`navbar.ts` and `drawer-tabs.ts` both import `ResolvedSlot` from `hub-registry.ts`, which Task 4 deletes. The type is the navbar's input contract — what it needs to draw a pill — not a registry concept. `enabled`/`pageable` go with it: every drawer tab is real and reachable by definition, and `drawer-tabs.ts` currently sets both to a constant `true` purely to satisfy the type. A module that has to lie to satisfy a type is a sign the type belongs elsewhere.
+`navbar.ts` and `drawer-tabs.ts` both import `ResolvedSlot` from `hub-registry.ts`, which this task deletes. The type is the navbar's input contract — what it needs to draw a pill — not a registry concept. `enabled`/`pageable` go with it: every drawer tab is real and reachable by definition, and `drawer-tabs.ts` currently sets both to a constant `true` purely to satisfy the type. A module that has to lie to satisfy a type is a sign the type belongs elsewhere.
 
 - [ ] **Step 1: Add the type to `navbar.ts`**
 
@@ -156,24 +156,162 @@ and replace the `tabsAsSlots` function wholesale:
     }));
 ```
 
-- [ ] **Step 4: Verify the gate**
+- [ ] **Step 4: Do NOT run the gate yet**
+
+`hub-level.ts:474` calls `new PhoneChromeNavbar(host, resolved, container)` with a `ResolvedSlot[]`, so retyping the constructor breaks it immediately. There is no intermediate state that compiles: `hub-level.ts` cannot survive the retype, and it cannot be deleted first because `navbar.ts` still imports from `hub-registry.ts`. The deletion below is therefore part of this task, not a later one.
+
+Continue straight to Step 5.
+
+- [ ] **Step 5: Delete the files**
+
+```bash
+git rm src/phone-chrome/hub-level.ts src/phone-chrome/pager.ts \
+       src/phone-chrome/hub-registry.ts src/phone-chrome/hub-registry.test.ts \
+       src/phone-chrome/slots.ts src/phone-chrome/slots.test.ts
+```
+
+- [ ] **Step 6: Unwire `main.ts`**
+
+Delete this import line:
+
+```ts
+import { installPhoneChrome } from './phone-chrome/hub-level';
+```
+
+Delete the field and its doc comment:
+
+```ts
+  /** Re-syncs the phone hub chrome against current settings/workspace state
+   *  — a no-op on desktop. Exposed so the settings tab's `phoneChrome`
+   *  toggle can apply live instead of waiting for the next
+   *  layout-change/active-leaf-change. Assigned in `onload()`. */
+  syncPhoneChrome: () => void = () => {};
+```
+
+Delete the call and its comment from `onload()`:
+
+```ts
+    // Phone-only: segmented hub navbar with a swipe pager (default off).
+    this.syncPhoneChrome = installPhoneChrome(this);
+```
+
+Leave `installDrawerTabs`/`syncDrawerTabs` exactly as they are.
+
+- [ ] **Step 7: Remove the settings**
+
+In `src/settings.ts`:
+
+Delete the import of the slots module:
+
+```ts
+import {
+  DEFAULT_PHONE_CHROME_SLOTS,
+  parsePhoneChromeSlots,
+  type PhoneChromeSlot,
+} from './phone-chrome/slots';
+```
+
+(if the names are spread across an existing import block, remove only these three.)
+
+Delete both interface fields and their doc comments:
+
+```ts
+  phoneChrome: boolean;
+  /** The hub views the phone-chrome pager moves between, in bar order. */
+  phoneChromeSlots: PhoneChromeSlot[];
+```
+
+Delete both `DEFAULT_SETTINGS` entries:
+
+```ts
+  phoneChrome: false,
+  phoneChromeSlots: [...DEFAULT_PHONE_CHROME_SLOTS],
+```
+
+Delete both `parseSettings` entries:
+
+```ts
+    phoneChrome:
+      typeof data.phoneChrome === 'boolean'
+        ? data.phoneChrome
+        : DEFAULT_SETTINGS.phoneChrome,
+    phoneChromeSlots: parsePhoneChromeSlots(data.phoneChromeSlots),
+```
+
+Delete the whole "Phone hub navbar" `new Setting(containerEl)` block from `PortalSettingTab.display()` — the one whose `.setName('Phone hub navbar')` and whose `onChange` calls `this.plugin.syncPhoneChrome()`. Leave the "Drawer tab bar" block that follows it.
+
+- [ ] **Step 8: Remove the hub CSS**
+
+In `styles.css`, delete every rule whose selector mentions `.portal-phone-hub`, `.portal-phone-peek`, `.portal-phone-dragging` or `.portal-phone-settling`, together with the comment blocks that introduce them.
+
+**Keep** every `.portal-phone-navbar`, `.portal-phone-slot`, `.portal-phone-slot-bg`, `.portal-phone-pill-cap`, `.portal-phone-pill-mid`, `.portal-phone-slot-icon` and `.portal-phone-slot-label` rule — those draw the pills the drawer bar uses — and keep `.portal-drawer-tabs`.
+
+**One block needs editing, not deleting.** The `prefers-reduced-motion` rule (around line 709) lists navbar selectors to keep AND one hub selector to remove, in the same selector list. Deleting the whole block would silently strip reduced-motion support from the pills. Change it from:
+
+```css
+  .portal-phone-navbar.is-animating .portal-phone-slot,
+  .portal-phone-navbar.is-animating .portal-phone-pill-cap,
+  .portal-phone-navbar.is-animating .portal-phone-pill-mid,
+  .portal-phone-navbar.is-animating .portal-phone-slot-bg,
+  .portal-phone-navbar.is-animating .portal-phone-slot-label,
+  .portal-phone-hub > .workspace-leaf.portal-phone-settling {
+    transition: none;
+  }
+```
+
+to just the five navbar lines (drop the trailing `.portal-phone-hub` selector and move the comma):
+
+```css
+  .portal-phone-navbar.is-animating .portal-phone-slot,
+  .portal-phone-navbar.is-animating .portal-phone-pill-cap,
+  .portal-phone-navbar.is-animating .portal-phone-pill-mid,
+  .portal-phone-navbar.is-animating .portal-phone-slot-bg,
+  .portal-phone-navbar.is-animating .portal-phone-slot-label {
+    transition: none;
+  }
+```
+
+Verify nothing was over-deleted:
+
+```bash
+grep -c "portal-phone-navbar\|portal-phone-slot" styles.css   # expect > 0
+grep -c "portal-phone-hub\|portal-phone-peek" styles.css      # expect 0
+```
+
+- [ ] **Step 9: Verify nothing still references the deleted modules**
+
+```bash
+grep -rn "hub-level\|installPhoneChrome\|syncPhoneChrome\|phoneChromeSlots\|hub-registry\|PhoneChromePager\|ResolvedSlot" src/ || echo "clean"
+```
+
+Expected: `clean`. Any hit is a reference the deletion missed — fix it before continuing.
+
+- [ ] **Step 10: Verify the gate**
 
 Run: `pnpm release:check`
-Expected: exit 0 — lint clean, all tests pass, typecheck and build succeed. `hub-level.ts` still imports `ResolvedSlot` from `hub-registry.ts` and still compiles; it is deleted in Task 4.
+Expected: exit 0. The test count drops (the two deleted test files go with their modules); `pill-geometry.test.ts`, `gesture-decide.test.ts` and `drawer-model.test.ts` must all still be present and green.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 11: Confirm the feature is inert on desktop**
+
+Run: `pnpm build`, then reload Obsidian on desktop and confirm nothing changed — the rail behaves as before, no `.portal-phone-*` or `.portal-drawer-tabs` element exists in the DOM, and no console errors appear. `Platform.isPhone` is false there, so `installDrawerTabs` returns before touching anything.
+
+- [ ] **Step 12: Commit**
 
 ```bash
 git status --short
-git commit -- src/phone-chrome/navbar.ts src/phone-chrome/drawer-tabs.ts -m "refactor(phone-chrome): navbar owns its slot type
+git commit -- src/phone-chrome/ src/main.ts src/settings.ts styles.css -m "feat(phone-chrome)!: remove the hub navbar
 
-ResolvedSlot carried enabled/pageable — two questions that only made sense
-for the hub's configurable slots. Every drawer tab is real and reachable, so
-drawer-tabs.ts was setting both to a constant true purely to compile. A
-module that has to lie to satisfy a type is a sign the type belongs
-elsewhere."
+It never worked on device. All three defects — a neighbouring view that
+stayed invisible during the drag, taps landing on live content underneath,
+two leaves tearing apart mid-glide — came from one root cause: it dragged
+real workspace leaves inside a container it did not own.
+
+The drawer tab bar replaces it, where Obsidian owns the swap.
+
+Removes hub-level, pager, hub-registry, slots and their tests, both settings,
+and the related CSS. navbar/pill-geometry/gesture-decide stay — the drawer
+bar uses them."
 ```
-
 ---
 
 ### Task 2: Extract the drawer-reading logic as pure functions
@@ -702,172 +840,7 @@ Accepted regression: content that scrolls horizontally inside a drawer
 
 ---
 
-### Task 4: Delete the hub navbar
-
-**Files:**
-- Delete: `src/phone-chrome/hub-level.ts`, `src/phone-chrome/pager.ts`, `src/phone-chrome/hub-registry.ts`, `src/phone-chrome/hub-registry.test.ts`, `src/phone-chrome/slots.ts`, `src/phone-chrome/slots.test.ts`
-- Modify: `src/main.ts`, `src/settings.ts`, `styles.css`
-
-**Interfaces:**
-- Consumes: nothing.
-- Produces: nothing. This task only removes.
-
-Everything here exists to serve the hub navbar over the root split, which never worked on device and is superseded. `navbar.ts`, `pill-geometry.ts`, `gesture-decide.ts` and their tests survive — the drawer bar uses them.
-
-- [ ] **Step 1: Delete the files**
-
-```bash
-git rm src/phone-chrome/hub-level.ts src/phone-chrome/pager.ts \
-       src/phone-chrome/hub-registry.ts src/phone-chrome/hub-registry.test.ts \
-       src/phone-chrome/slots.ts src/phone-chrome/slots.test.ts
-```
-
-- [ ] **Step 2: Unwire `main.ts`**
-
-Delete this import line:
-
-```ts
-import { installPhoneChrome } from './phone-chrome/hub-level';
-```
-
-Delete the field and its doc comment:
-
-```ts
-  /** Re-syncs the phone hub chrome against current settings/workspace state
-   *  — a no-op on desktop. Exposed so the settings tab's `phoneChrome`
-   *  toggle can apply live instead of waiting for the next
-   *  layout-change/active-leaf-change. Assigned in `onload()`. */
-  syncPhoneChrome: () => void = () => {};
-```
-
-Delete the call and its comment from `onload()`:
-
-```ts
-    // Phone-only: segmented hub navbar with a swipe pager (default off).
-    this.syncPhoneChrome = installPhoneChrome(this);
-```
-
-Leave `installDrawerTabs`/`syncDrawerTabs` exactly as they are.
-
-- [ ] **Step 3: Remove the settings**
-
-In `src/settings.ts`:
-
-Delete the import of the slots module:
-
-```ts
-import {
-  DEFAULT_PHONE_CHROME_SLOTS,
-  parsePhoneChromeSlots,
-  type PhoneChromeSlot,
-} from './phone-chrome/slots';
-```
-
-(if the names are spread across an existing import block, remove only these three.)
-
-Delete both interface fields and their doc comments:
-
-```ts
-  phoneChrome: boolean;
-  /** The hub views the phone-chrome pager moves between, in bar order. */
-  phoneChromeSlots: PhoneChromeSlot[];
-```
-
-Delete both `DEFAULT_SETTINGS` entries:
-
-```ts
-  phoneChrome: false,
-  phoneChromeSlots: [...DEFAULT_PHONE_CHROME_SLOTS],
-```
-
-Delete both `parseSettings` entries:
-
-```ts
-    phoneChrome:
-      typeof data.phoneChrome === 'boolean'
-        ? data.phoneChrome
-        : DEFAULT_SETTINGS.phoneChrome,
-    phoneChromeSlots: parsePhoneChromeSlots(data.phoneChromeSlots),
-```
-
-Delete the whole "Phone hub navbar" `new Setting(containerEl)` block from `PortalSettingTab.display()` — the one whose `.setName('Phone hub navbar')` and whose `onChange` calls `this.plugin.syncPhoneChrome()`. Leave the "Drawer tab bar" block that follows it.
-
-- [ ] **Step 4: Remove the hub CSS**
-
-In `styles.css`, delete every rule whose selector mentions `.portal-phone-hub`, `.portal-phone-peek`, `.portal-phone-dragging` or `.portal-phone-settling`, together with the comment blocks that introduce them.
-
-**Keep** every `.portal-phone-navbar`, `.portal-phone-slot`, `.portal-phone-slot-bg`, `.portal-phone-pill-cap`, `.portal-phone-pill-mid`, `.portal-phone-slot-icon` and `.portal-phone-slot-label` rule — those draw the pills the drawer bar uses — and keep `.portal-drawer-tabs`.
-
-**One block needs editing, not deleting.** The `prefers-reduced-motion` rule (around line 709) lists navbar selectors to keep AND one hub selector to remove, in the same selector list. Deleting the whole block would silently strip reduced-motion support from the pills. Change it from:
-
-```css
-  .portal-phone-navbar.is-animating .portal-phone-slot,
-  .portal-phone-navbar.is-animating .portal-phone-pill-cap,
-  .portal-phone-navbar.is-animating .portal-phone-pill-mid,
-  .portal-phone-navbar.is-animating .portal-phone-slot-bg,
-  .portal-phone-navbar.is-animating .portal-phone-slot-label,
-  .portal-phone-hub > .workspace-leaf.portal-phone-settling {
-    transition: none;
-  }
-```
-
-to just the five navbar lines (drop the trailing `.portal-phone-hub` selector and move the comma):
-
-```css
-  .portal-phone-navbar.is-animating .portal-phone-slot,
-  .portal-phone-navbar.is-animating .portal-phone-pill-cap,
-  .portal-phone-navbar.is-animating .portal-phone-pill-mid,
-  .portal-phone-navbar.is-animating .portal-phone-slot-bg,
-  .portal-phone-navbar.is-animating .portal-phone-slot-label {
-    transition: none;
-  }
-```
-
-Verify nothing was over-deleted:
-
-```bash
-grep -c "portal-phone-navbar\|portal-phone-slot" styles.css   # expect > 0
-grep -c "portal-phone-hub\|portal-phone-peek" styles.css      # expect 0
-```
-
-- [ ] **Step 5: Verify nothing still references the deleted modules**
-
-```bash
-grep -rn "hub-level\|installPhoneChrome\|syncPhoneChrome\|phoneChromeSlots\|hub-registry\|PhoneChromePager\|ResolvedSlot" src/ || echo "clean"
-```
-
-Expected: `clean`. Any hit is a reference the deletion missed — fix it before continuing.
-
-- [ ] **Step 6: Verify the gate**
-
-Run: `pnpm release:check`
-Expected: exit 0. The test count drops (the two deleted test files go with their modules); `pill-geometry.test.ts`, `gesture-decide.test.ts` and `drawer-model.test.ts` must all still be present and green.
-
-- [ ] **Step 7: Confirm the feature is inert on desktop**
-
-Run: `pnpm build`, then reload Obsidian on desktop and confirm nothing changed — the rail behaves as before, no `.portal-phone-*` or `.portal-drawer-tabs` element exists in the DOM, and no console errors appear. `Platform.isPhone` is false there, so `installDrawerTabs` returns before touching anything.
-
-- [ ] **Step 8: Commit**
-
-```bash
-git status --short
-git commit -- src/phone-chrome/ src/main.ts src/settings.ts styles.css -m "feat(phone-chrome)!: remove the hub navbar
-
-It never worked on device. All three defects — a neighbouring view that
-stayed invisible during the drag, taps landing on live content underneath,
-two leaves tearing apart mid-glide — came from one root cause: it dragged
-real workspace leaves inside a container it did not own.
-
-The drawer tab bar replaces it, where Obsidian owns the swap.
-
-Removes hub-level, pager, hub-registry, slots and their tests, both settings,
-and the related CSS. navbar/pill-geometry/gesture-decide stay — the drawer
-bar uses them."
-```
-
----
-
-### Task 5: Device verification
+### Task 4: Device verification
 
 **Files:**
 - Create: `docs/plans/2026-08-03-003-signoff.md`
