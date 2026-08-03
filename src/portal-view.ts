@@ -14,6 +14,7 @@ import {
   createNote,
   createFolder,
   type MenuActions,
+  type MenuAnchor,
 } from './nav/context-menu';
 import { mountToolbar, type ToolbarActions } from './nav/toolbar';
 import { mountNavBlock } from './nav/nav-block';
@@ -99,18 +100,58 @@ export class PortalView extends ItemView {
       if (!(target instanceof HTMLElement)) return;
       const row = target.closest('[data-path]');
       if (!(row instanceof HTMLElement) || !row.dataset.path) return;
-      const file = this.app.vault.getAbstractFileByPath(row.dataset.path);
-      if (!file) return;
       event.preventDefault();
-
-      // Bulk menu when right-clicking inside a multi-selection.
-      const selection = this.folders?.getSelection() ?? [];
-      if (selection.length > 1 && selection.includes(row.dataset.path)) {
-        showBulkMenu(this.app, selection, event, (paths) => void this.pinned?.pinAll(paths));
-        return;
-      }
-      showFileMenu(this.app, file, event, row, this.menuActions());
+      this.openRowMenu(row, event);
     });
+
+    // Long-press (U8 touch parity): the native file explorer opens the same
+    // menu on a held tap, since `contextmenu` never fires from touch on its
+    // own. Cancelled by scrolling (movement past the slop) or an early
+    // release, so a normal tap-to-open still passes through untouched.
+    const LONG_PRESS_MS = 500;
+    const LONG_PRESS_SLOP_PX = 10;
+    let pressTimer: number | null = null;
+    let pressRow: HTMLElement | null = null;
+    let pressStart: { x: number; y: number } | null = null;
+    const cancelPress = (): void => {
+      if (pressTimer !== null) window.clearTimeout(pressTimer);
+      pressTimer = null;
+      pressRow = null;
+      pressStart = null;
+    };
+    scope.registerDomEvent(
+      this.contentEl,
+      'touchstart',
+      (event: TouchEvent) => {
+        const touch = event.touches[0];
+        const target = event.target;
+        if (!touch || !(target instanceof HTMLElement)) return;
+        const row = target.closest('[data-path]');
+        if (!(row instanceof HTMLElement) || !row.dataset.path) return;
+        pressRow = row;
+        pressStart = { x: touch.clientX, y: touch.clientY };
+        pressTimer = window.setTimeout(() => {
+          if (pressRow) this.openRowMenu(pressRow, { clientX: touch.clientX, clientY: touch.clientY });
+          cancelPress();
+        }, LONG_PRESS_MS);
+      },
+      { passive: true },
+    );
+    scope.registerDomEvent(
+      this.contentEl,
+      'touchmove',
+      (event: TouchEvent) => {
+        if (!pressStart) return;
+        const touch = event.touches[0];
+        if (!touch) return;
+        const dx = touch.clientX - pressStart.x;
+        const dy = touch.clientY - pressStart.y;
+        if (Math.hypot(dx, dy) > LONG_PRESS_SLOP_PX) cancelPress();
+      },
+      { passive: true },
+    );
+    scope.registerDomEvent(this.contentEl, 'touchend', cancelPress);
+    scope.registerDomEvent(this.contentEl, 'touchcancel', cancelPress);
 
     // Native page preview on hover (core "Page preview" plugin listens).
     // Deduped by path so a stationary cursor over sliding content (e.g. during
@@ -282,6 +323,20 @@ export class PortalView extends ItemView {
     if (collapsed && i < 0) list.push(key);
     else if (!collapsed && i >= 0) list.splice(i, 1);
     await this.ctx.saveSettings();
+  }
+
+  /** Shared by right-click and long-press: single file vs. bulk menu for a row. */
+  private openRowMenu(row: HTMLElement, anchor: MenuAnchor): void {
+    const path = row.dataset.path;
+    if (!path) return;
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!file) return;
+    const selection = this.folders?.getSelection() ?? [];
+    if (selection.length > 1 && selection.includes(path)) {
+      showBulkMenu(this.app, selection, anchor, (paths) => void this.pinned?.pinAll(paths));
+      return;
+    }
+    showFileMenu(this.app, file, anchor, row, this.menuActions());
   }
 
   private menuActions(): MenuActions {

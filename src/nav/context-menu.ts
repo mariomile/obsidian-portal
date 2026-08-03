@@ -71,11 +71,18 @@ class BulkMoveModal extends FuzzySuggestModal<TFolder> {
   }
 }
 
+/** Where to anchor a menu — a `MouseEvent` (right-click) or a touch point
+ *  (long-press) both carry these two fields, so either can be passed as-is. */
+export interface MenuAnchor {
+  clientX: number;
+  clientY: number;
+}
+
 /** Bulk actions on a multi-selection (move / delete / pin). */
 export function showBulkMenu(
   app: App,
   paths: string[],
-  event: MouseEvent,
+  anchor: MenuAnchor,
   onPin: (paths: string[]) => void,
 ): void {
   const menu = new Menu();
@@ -104,7 +111,7 @@ export function showBulkMenu(
       .setIcon('pin')
       .onClick(() => onPin(paths)),
   );
-  menu.showAtMouseEvent(event);
+  menu.showAtPosition({ x: anchor.clientX, y: anchor.clientY });
 }
 
 /** A collision-free path like `dir/Base`, `dir/Base 1`, `dir/Base 2`. */
@@ -140,7 +147,7 @@ export async function createFolder(app: App, parent: TFolder | null): Promise<vo
 export function showFileMenu(
   app: App,
   file: TAbstractFile,
-  event: MouseEvent,
+  anchor: MenuAnchor,
   rowEl: HTMLElement,
   actions: MenuActions,
 ): void {
@@ -201,5 +208,5 @@ export function showFileMenu(
   menu.addSeparator();
   app.workspace.trigger('file-menu', menu, file, 'portal');
 
-  menu.showAtMouseEvent(event);
+  menu.showAtPosition({ x: anchor.clientX, y: anchor.clientY });
 }
