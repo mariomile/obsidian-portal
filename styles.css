@@ -695,3 +695,10 @@ body.is-phone .portal-section-header {
   margin: var(--size-4-2, 8px) var(--size-4-3, 12px);
   flex: 0 0 auto;
 }
+
+/* Horizontal drags belong to the bar; the browser keeps vertical scrolling.
+   Without this the drawer's own scroll and our gesture fight on every
+   diagonal thumb. */
+.portal-drawer-tabs {
+  touch-action: pan-y;
+}

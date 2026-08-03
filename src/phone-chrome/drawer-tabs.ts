@@ -1,44 +1,64 @@
 import { Platform } from 'obsidian';
-import type { WorkspaceLeaf } from 'obsidian';
+import type { WorkspaceLeaf, WorkspaceMobileDrawer, WorkspaceSidedock } from 'obsidian';
 import type PortalPlugin from '../main';
 import { drawerTabParentOf, selectDrawerTab } from '../obsidian-internals';
-import { PhoneChromeNavbar, type NavbarSlot } from './navbar';
+import { clampTabIndex, tabsSignature, tabsToSlots, type TabInfo } from './drawer-model';
+import { decideClaim, decideSnap } from './gesture-decide';
+import { PhoneChromeNavbar } from './navbar';
 
 /**
- * Phone-only: a segmented pill bar at the top of the right drawer, driving
+ * Phone-only: a segmented pill bar at the top of each mobile drawer, driving
  * Obsidian's own drawer tabs.
  *
- * Why here and not over the root split (which the hub navbar does): inside a
- * drawer, Obsidian already stacks every tab's view absolutely at full size
- * and swaps them itself. Nothing has to be dragged, revealed, or cleaned up,
- * so the whole class of defects that came from borrowing the tab container —
- * a neighbour leaf that stays invisible until it is activated, taps landing
- * on live content underneath a drag — cannot happen. `selectTabIndex` is the
- * same entry point Obsidian's own press-and-slide selector calls.
+ * Why the drawer and not the root split (which the removed hub navbar tried):
+ * inside a drawer Obsidian owns the swap. `selectTabIndex` is the same entry
+ * point its native press-and-slide selector calls, and the active view is
+ * rendered into `.workspace-drawer-active-tab-content`. Nothing has to be
+ * reparented, revealed, or cleaned up, so the defects that came from dragging
+ * real leaves in a borrowed container cannot occur here.
  *
  * The tabs are read from the drawer, never configured: the bar shows exactly
- * what is in there right now, so it cannot advertise a section that does not
- * exist. That is the opposite of the hub navbar's configured-slots model, and
- * deliberately so — here there is nothing to resolve or lazily create.
+ * what is in there, so it cannot advertise a section that does not exist.
  *
- * Obsidian's native selector stays where it is. This bar is additive: it
- * turns "press the selector, wait for the list, slide to a tab" into one tap.
+ * The bar is additive — Obsidian's native selector stays where it is, so a
+ * failure degrades to the previous behaviour instead of trapping the user.
  */
 
-/** Marks the drawer while our bar is mounted (styling hook). */
+/** Marks a drawer while our bar owns it: styling, and `touch-action` so the
+ *  browser leaves horizontal drags to us and keeps vertical scrolling. */
 const DRAWER_CLASS = 'portal-drawer-tabs';
+
+/** Which side a mounted bar belongs to. */
+type Side = 'left' | 'right';
+
+const HOST_SELECTOR: Record<Side, string> = {
+  left: '.workspace-drawer.mod-left .workspace-drawer-active-tab-container',
+  right: '.workspace-drawer.mod-right .workspace-drawer-active-tab-container',
+};
+
+interface Mounted {
+  navbar: PhoneChromeNavbar;
+  host: HTMLElement;
+  signature: string;
+  /** Torn down with the bar; see `attachGesture`. */
+  detachGesture: () => void;
+}
 
 export function installDrawerTabs(plugin: PortalPlugin): () => void {
   if (!Platform.isPhone) return () => {};
 
-  let navbar: PhoneChromeNavbar | null = null;
-  let host: HTMLElement | null = null;
-  let mountedSignature = '';
+  const mounted = new Map<Side, Mounted>();
   let disposed = false;
 
-  /** Every leaf living in the right drawer, in tab order. */
-  const drawerLeaves = (): WorkspaceLeaf[] => {
-    const root = plugin.app.workspace.rightSplit;
+  // `WorkspaceSidedock | WorkspaceMobileDrawer`, not just the former: on
+  // phone these ARE drawers, and narrowing to the desktop type would not
+  // compile. We only ever compare it by identity against `leaf.getRoot()`.
+  const sideRoot = (side: Side): WorkspaceSidedock | WorkspaceMobileDrawer =>
+    side === 'left' ? plugin.app.workspace.leftSplit : plugin.app.workspace.rightSplit;
+
+  /** Every leaf in that drawer, in tab order. */
+  const drawerLeaves = (side: Side): WorkspaceLeaf[] => {
+    const root = sideRoot(side);
     const leaves: WorkspaceLeaf[] = [];
     plugin.app.workspace.iterateAllLeaves((leaf) => {
       if (leaf.getRoot() === root) leaves.push(leaf);
@@ -46,105 +66,232 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
     return leaves;
   };
 
-  /** Tabs as the bar renders them. Read live from the drawer, so the bar can
-   *  only ever show sections that are actually in there. */
-  const tabsAsSlots = (leaves: WorkspaceLeaf[]): NavbarSlot[] =>
-    leaves.map((leaf, i) => ({
-      id: `drawer-${i}`,
+  const tabsOf = (leaves: readonly WorkspaceLeaf[]): TabInfo[] =>
+    leaves.map((leaf) => ({
       icon: leaf.view.getIcon(),
       label: leaf.view.getDisplayText(),
+      viewType: leaf.view.getViewType(),
     }));
 
-  /** Changes whenever the drawer's tab set changes, so a remount happens on
-   *  a plugin adding/removing a sidebar view but not on every event. */
-  const signatureOf = (leaves: WorkspaceLeaf[]): string =>
-    leaves.map((l) => l.view.getViewType()).join('|');
+  /** Current tab index for a drawer, clamped. */
+  const activeIndexOf = (side: Side, count: number): number => {
+    const first = drawerLeaves(side)[0];
+    const parent = first ? drawerTabParentOf(first) : null;
+    const raw = parent && typeof parent.currentTab === 'number' ? parent.currentTab : 0;
+    return clampTabIndex(raw, count);
+  };
 
-  const unmount = (): void => {
-    navbar?.destroy();
-    navbar = null;
-    host?.removeClass(DRAWER_CLASS);
-    host = null;
-    mountedSignature = '';
+  /** Switch a drawer to `index`, via the same call the native selector uses. */
+  const goToTab = (side: Side, index: number): void => {
+    const first = drawerLeaves(side)[0];
+    if (!first) return;
+    const parent = drawerTabParentOf(first);
+    if (!parent) return;
+    selectDrawerTab(parent, index);
+  };
+
+  const unmount = (side: Side): void => {
+    const entry = mounted.get(side);
+    if (!entry) return;
+    entry.detachGesture();
+    entry.navbar.destroy();
+    entry.host.removeClass(DRAWER_CLASS);
+    mounted.delete(side);
+  };
+
+  const unmountAll = (): void => {
+    for (const side of [...mounted.keys()]) unmount(side);
+  };
+
+  /**
+   * Horizontal drag over the whole drawer changes section.
+   *
+   * Only the PILL moves while the finger is down. Obsidian renders just the
+   * active tab, so there is no neighbouring view to drag — showing one would
+   * mean mounting views it never built, which is exactly what went wrong in
+   * the hub navbar. The pill still answers "where am I going", which is what
+   * the gesture has to communicate.
+   *
+   * Deliberate consequence, chosen by Mario over a narrower gesture: content
+   * that scrolls horizontally inside a drawer (Bases tables) can no longer be
+   * scrolled sideways while this is on.
+   */
+  const attachGesture = (side: Side, host: HTMLElement, count: number): (() => void) => {
+    let startX = 0;
+    let startY = 0;
+    let lastX = 0;
+    let lastTime = 0;
+    let prevX = 0;
+    let prevTime = 0;
+    let width = 1;
+    let state: 'idle' | 'pending' | 'dragging' | 'released' = 'idle';
+    let from = 0;
+
+    const onStart = (evt: TouchEvent): void => {
+      const touch = evt.touches[0];
+      if (!touch) return;
+      startX = touch.clientX;
+      startY = touch.clientY;
+      lastX = touch.clientX;
+      prevX = touch.clientX;
+      lastTime = evt.timeStamp;
+      prevTime = evt.timeStamp;
+      state = 'pending';
+    };
+
+    const onMove = (evt: TouchEvent): void => {
+      const touch = evt.touches[0];
+      if (!touch) return;
+      if (state === 'released' || state === 'idle') return;
+
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+
+      if (state === 'pending') {
+        const claim = decideClaim(dx, dy);
+        if (claim === 'pending') return;
+        if (claim === 'ignore') {
+          state = 'released';
+          return;
+        }
+        state = 'dragging';
+        from = activeIndexOf(side, count);
+        // The one layout read of the gesture; every frame after reuses it.
+        width = host.clientWidth || 1;
+      }
+
+      // Claimed: the browser must not also scroll or fire a native gesture.
+      evt.preventDefault();
+
+      const progress = Math.max(-1, Math.min(1, -dx / width));
+      const target = progress > 0 ? from + 1 : from - 1;
+      prevX = lastX;
+      prevTime = lastTime;
+      lastX = touch.clientX;
+      lastTime = evt.timeStamp;
+
+      const entry = mounted.get(side);
+      // Out of range at either end → the pill stays put and the drag
+      // rubber-bands, which is what `setProgress` does with no target.
+      if (target < 0 || target >= count) {
+        entry?.navbar.setProgress(from, 0);
+        return;
+      }
+      entry?.navbar.setProgress(from, progress, target);
+    };
+
+    const onEnd = (evt: TouchEvent): void => {
+      if (state !== 'dragging') {
+        state = 'idle';
+        return;
+      }
+      state = 'idle';
+
+      const dx = lastX - startX;
+      const progress = Math.max(-1, Math.min(1, -dx / width));
+      // Instantaneous velocity from the last two samples, in progress-per-ms
+      // (decideSnap's unit). An average over the gesture would dilute a flick
+      // thrown at the end of a slow drag — the case flick detection exists
+      // for. A touchend long after the last move describes motion that has
+      // already stopped, so it reads as zero.
+      const dt = lastTime - prevTime;
+      const sinceLastMove = evt.timeStamp - lastTime;
+      const velocity = dt <= 0 || sinceLastMove > 60 ? 0 : -(lastX - prevX) / width / dt;
+
+      const decision =
+        evt.type === 'touchcancel' ? 'back' : decideSnap(progress, velocity, from, count);
+      const landing = decision === 'next' ? from + 1 : decision === 'prev' ? from - 1 : from;
+
+      const entry = mounted.get(side);
+      entry?.navbar.render(clampTabIndex(landing, count));
+      if (landing !== from) goToTab(side, landing);
+    };
+
+    // touchmove is never passive: a claimed drag must preventDefault().
+    host.addEventListener('touchstart', onStart, { passive: true });
+    host.addEventListener('touchmove', onMove, { passive: false });
+    host.addEventListener('touchend', onEnd, { passive: true });
+    host.addEventListener('touchcancel', onEnd, { passive: true });
+
+    return () => {
+      host.removeEventListener('touchstart', onStart);
+      host.removeEventListener('touchmove', onMove);
+      host.removeEventListener('touchend', onEnd);
+      host.removeEventListener('touchcancel', onEnd);
+    };
+  };
+
+  const syncSide = (side: Side): void => {
+    const leaves = drawerLeaves(side);
+    const tabs = tabsOf(leaves);
+
+    // One tab is not a bar; zero means the drawer is not built yet.
+    if (tabs.length < 2) {
+      unmount(side);
+      return;
+    }
+
+    const first = leaves[0];
+    // Fail-safe: an Obsidian change to the drawer internals means the bar
+    // never mounts, and the native selector keeps working untouched.
+    if (!first || !drawerTabParentOf(first)) {
+      unmount(side);
+      return;
+    }
+
+    const host = document.querySelector<HTMLElement>(HOST_SELECTOR[side]);
+    if (!host) {
+      unmount(side);
+      return;
+    }
+
+    const signature = tabsSignature(tabs);
+    const existing = mounted.get(side);
+    if (existing && (existing.host !== host || existing.signature !== signature)) {
+      // The drawer was rebuilt, or its tab set changed. `PhoneChromeNavbar`
+      // fixes its slots at construction, so a fresh mount is the only way
+      // either change reaches the bar.
+      unmount(side);
+    }
+
+    if (!mounted.has(side)) {
+      host.addClass(DRAWER_CLASS);
+      const navbar = new PhoneChromeNavbar(host, tabsToSlots(tabs), host.firstChild);
+      navbar.onSelect = (index) => {
+        navbar.render(clampTabIndex(index, tabs.length));
+        goToTab(side, index);
+      };
+      const detachGesture = attachGesture(side, host, tabs.length);
+      mounted.set(side, { navbar, host, signature, detachGesture });
+    }
+
+    mounted.get(side)?.navbar.render(activeIndexOf(side, tabs.length));
   };
 
   const sync = (): void => {
     if (disposed) return;
     if (!plugin.settings.drawerTabs) {
-      if (navbar) unmount();
+      unmountAll();
       return;
     }
-
-    const leaves = drawerLeaves();
-    // One tab is not a bar; zero means the drawer has not been built yet.
-    if (leaves.length < 2) {
-      if (navbar) unmount();
-      return;
-    }
-
-    const first = leaves[0];
-    if (!first) return;
-    const parent = drawerTabParentOf(first);
-    // Fail-safe: an Obsidian change to the drawer's internals means the bar
-    // simply never mounts, and the native selector keeps working untouched.
-    if (!parent) {
-      if (navbar) unmount();
-      return;
-    }
-
-    const liveHost = document.querySelector<HTMLElement>(
-      '.workspace-drawer.mod-right .workspace-drawer-active-tab-container',
-    );
-    if (!liveHost) {
-      if (navbar) unmount();
-      return;
-    }
-
-    const signature = signatureOf(leaves);
-    if (navbar && (liveHost !== host || signature !== mountedSignature)) {
-      // The drawer was rebuilt, or its tab set changed. `PhoneChromeNavbar`
-      // fixes its slots at construction, so a fresh mount is the only way
-      // either change reaches the bar.
-      unmount();
-    }
-
-    if (!navbar) {
-      host = liveHost;
-      host.addClass(DRAWER_CLASS);
-      mountedSignature = signature;
-      navbar = new PhoneChromeNavbar(host, tabsAsSlots(leaves), host.firstChild);
-      navbar.onSelect = (index) => {
-        const current = drawerLeaves();
-        const target = current[0];
-        if (!target) return;
-        const live = drawerTabParentOf(target);
-        if (!live) return;
-        selectDrawerTab(live, index);
-        // Render immediately rather than waiting for the event this fires:
-        // we already know which tab was chosen.
-        navbar?.render(index);
-      };
-    }
-
-    const activeIndex = Math.max(0, typeof parent.currentTab === 'number' ? parent.currentTab : 0);
-    navbar.render(activeIndex);
+    syncSide('left');
+    syncSide('right');
   };
 
   plugin.registerEvent(plugin.app.workspace.on('layout-change', sync));
   plugin.registerEvent(plugin.app.workspace.on('active-leaf-change', sync));
   plugin.app.workspace.onLayoutReady(sync);
-  // The drawer can be laid out a frame after we attach; render() no-ops at
-  // zero width, so without a retry a mount into an unlaid-out host is
-  // permanent.
+  // A drawer can gain its width a frame after we attach; render() no-ops at
+  // zero width, so without a retry a mount into an unlaid-out host sticks.
   const bootTimer = window.setTimeout(sync, 0);
   plugin.registerDomEvent(window, 'resize', () => {
-    if (navbar) sync();
+    if (mounted.size > 0) sync();
   });
 
   plugin.register(() => {
     disposed = true;
     window.clearTimeout(bootTimer);
-    unmount();
+    unmountAll();
   });
 
   return sync;
