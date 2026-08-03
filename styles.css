@@ -103,12 +103,19 @@
   }
 }
 
+/* Eyebrow, non intestazione. Era --font-ui-medium/600/--text-normal, cioè un
+   titolo che competeva con i nomi dei file sotto di sé; in Craft l'etichetta
+   di sezione è piccola, muta e spaziata, e lascia tutto il peso ai contenuti.
+   È la ricetta --mv-label-* che il tema usa già per gli header di Bases e le
+   sezioni delle impostazioni: adottarla qui allinea la sidebar al resto. */
 .portal-section-title {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: var(--font-ui-medium, 0.9375rem);
-  font-weight: var(--font-semibold, 600);
-  color: var(--text-normal);
+  color: var(--mv-label-color, var(--text-muted));
+  font-size: var(--mv-label-size, 0.7rem);
+  font-weight: var(--mv-label-weight, 600);
+  letter-spacing: var(--mv-label-track, 0.05em);
+  text-transform: var(--mv-label-transform, uppercase);
   transition: color var(--portal-wash-motion);
 }
 @media (hover: hover) {
