@@ -40,6 +40,8 @@ interface NavEntry {
   label: string;
   enabled: boolean;
   run: () => void;
+  /** Optional hover-reveal shortcut at the row's trailing edge (Craft's ⇗ pattern). */
+  action?: { icon: string; label: string; run: () => void };
 }
 
 /**
@@ -75,6 +77,11 @@ export function mountNavBlock(app: App, containerEl: HTMLElement): void {
       label: 'Calendar',
       enabled: Boolean(getPlugin(app, 'horizon')),
       run: () => executeCommand(app, 'horizon:open-calendar'),
+      action: {
+        icon: 'target',
+        label: "Today's note",
+        run: () => executeCommand(app, 'horizon:open-today-note'),
+      },
     },
   ];
 
@@ -85,6 +92,17 @@ export function mountNavBlock(app: App, containerEl: HTMLElement): void {
     const icon = row.createSpan({ cls: 'portal-row-icon' });
     setIcon(icon, entry.icon);
     row.createSpan({ cls: 'portal-label', text: entry.label });
+    if (entry.action) {
+      const action = row.createSpan({
+        cls: 'portal-nav-action',
+        attr: { 'aria-label': entry.action.label },
+      });
+      setIcon(action, entry.action.icon);
+      action.addEventListener('click', (event) => {
+        event.stopPropagation();
+        entry.action?.run();
+      });
+    }
     row.addEventListener('click', entry.run);
   }
 }

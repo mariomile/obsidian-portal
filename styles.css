@@ -488,6 +488,32 @@
 .portal-nav-row .portal-row-icon {
   color: var(--text-normal);
 }
+/* Calendar's hover-reveal shortcut straight to today's note — same ⇗
+   affordance as .portal-collection-open, kept as its own class since it
+   lives in the fixed nav block rather than a tree row. */
+.portal-nav-action {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--text-faint);
+  opacity: 0;
+  transition: opacity var(--portal-wash-motion), color var(--portal-wash-motion);
+}
+.portal-nav-action svg {
+  width: 13px;
+  height: 13px;
+}
+@media (hover: hover) {
+  .portal-nav-row:hover .portal-nav-action {
+    opacity: 1;
+  }
+  .portal-nav-action:hover {
+    color: var(--text-normal);
+  }
+}
 
 /* --- mobile slice: touch targets + always-on affordances -----------------
    On phone the sidebar is a full-screen drawer; hover doesn't exist, so
@@ -524,6 +550,10 @@
      unreachable on touch (never behind a state the finger can't produce). */
   .portal-collection-open {
     opacity: 1;
+  }
+  .portal-nav-action {
+    opacity: 1;
+    width: var(--cosmos-touch-min, 44px);
   }
 }
 body.is-phone .portal-tree-row,
