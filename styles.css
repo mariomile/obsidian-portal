@@ -688,12 +688,18 @@ body.is-phone .portal-section-header {
   align-items: center;
 }
 
-/* Anchored past the icon box; fades with the expansion share, never scales. */
+/* Anchored past the icon box; fades with the expansion share, never scales.
+   max-width here is only a ceiling for the very first paint (before JS has
+   measured anything) — navbar.ts's apply() overwrites it every frame with
+   the pill's REAL leftover width. With many slots in a crowded drawer that
+   real budget is far below 200px, and without the per-frame clamp a long
+   label (e.g. "All properties") painted straight past its own capsule. */
 .portal-phone-slot-label {
   position: absolute;
   left: var(--portal-phone-icon-size);
   white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
   max-width: 200px;
   font-size: var(--font-ui-small);
   opacity: 0;

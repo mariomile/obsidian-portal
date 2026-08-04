@@ -155,6 +155,12 @@ export class PhoneChromeNavbar {
       // Wash and label share the expansion share as their opacity.
       bgEl.style.opacity = String(pill.labelOpacity);
       labelEl.style.opacity = String(pill.labelOpacity);
+      // Clip the label to what THIS pill actually has beyond its icon — the
+      // CSS max-width (200px) is only a first-paint ceiling. With many slots
+      // sharing one bar the real leftover budget is often much smaller, and
+      // without this the label painted straight past its own capsule (e.g.
+      // "All properties" in an 11-tab drawer).
+      labelEl.style.maxWidth = `${Math.max(0, pill.width - this.iconWidth)}px`;
       slotEl.toggleClass('is-active', i === activeIndex);
     });
   }
