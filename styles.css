@@ -776,3 +776,43 @@ body.is-phone
   .workspace-leaf-content[data-type='markdown'] {
   background-color: var(--background-primary);
 }
+
+/* --- phone chrome: the header band stops tinting itself --------------------
+   With floating navigation the whole header is raised, not just the controls
+   sitting in it:
+
+     .is-phone .mod-raised { background: var(--raised-background) }
+     --blur-background: color-mix(--background-primary, transparent) + gradient
+
+   so `.view-header` paints a full-width tinted strip behind the two pills.
+   Obsidian itself zeroes this the moment floating nav is off
+   (`.is-phone:not(.is-floating-nav) .view-header { --raised-background:
+   transparent }`), which is the tell that the strip belongs to the mode, not
+   to the design.
+
+   Drop the tint and the edge, keep `backdrop-filter`. They are separate
+   properties, and only the tint draws a band: what is left is a pure blur, so
+   content still shows through as it travels under — the glass survives intact,
+   which is the whole requirement.
+
+   Set on the element, never through `--raised-background`. That token would
+   inherit into the pills nested in this header and strip their glass too — the
+   one thing that must not happen. Everything here is a non-inherited property
+   for exactly that reason. */
+body.is-phone.is-floating-nav .workspace-split.mod-root .view-header {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* The iOS edge-highlight pseudo Obsidian draws on every raised surface. On a
+   pill it is a rim; stretched across the header it is the band's outline. Hit
+   the pseudo directly rather than `--raised-mask-display`, which is a token and
+   would take the pills' rims down with it.
+
+   Excludes is-hidden-nav: Obsidian reuses this same pseudo there as a scrim of
+   its own, and that one has a job. */
+body.is-phone.is-floating-nav:not(.is-hidden-nav)
+  .workspace-split.mod-root
+  .view-header::after {
+  display: none;
+}
