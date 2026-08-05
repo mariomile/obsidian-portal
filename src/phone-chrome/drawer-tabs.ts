@@ -3,7 +3,7 @@ import type { WorkspaceLeaf, WorkspaceMobileDrawer, WorkspaceSidedock } from 'ob
 import type PortalPlugin from '../main';
 import { drawerTabParentOf, selectDrawerTab } from '../obsidian-internals';
 import { clampTabIndex, tabsSignature, tabsToSlots, type TabInfo } from './drawer-model';
-import { decideClaim, decideSnap } from './gesture-decide';
+import { decideClaim, decideSnap, isInCloseGutter } from './gesture-decide';
 import { PhoneChromeNavbar } from './navbar';
 
 /**
@@ -43,10 +43,12 @@ const DRAWER_CLASS = 'portal-drawer-tabs';
  * selector for the same reason. On the host it covers every descendant, which
  * is the whole drawer body.
  *
- * The cost is the swipe-to-close over the drawer *body*. The drawer header is
- * a sibling of the host and keeps it, as does a tap on the backdrop, so the
- * drawer is never trapped open. Two gestures cannot share one surface, and
- * the tab swipe is the one this feature exists for.
+ * Two gestures cannot share one surface, so the body is partitioned instead:
+ * everything but a strip on the inner edge is the tab swipe's, and that strip
+ * — `isInCloseGutter` — is handed back by lifting this attribute for the
+ * duration of the touch. That partition replaced an earlier assumption that a
+ * tap on the backdrop would still close the drawer: a phone drawer is
+ * full-width and has no backdrop, which left the header as the only way out.
  */
 const IGNORE_SWIPE_ATTR = 'data-ignore-swipe';
 
@@ -155,6 +157,9 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
    * Deliberate consequence, chosen by Mario over a narrower gesture: content
    * that scrolls horizontally inside a drawer (Bases tables) can no longer be
    * scrolled sideways while this is on.
+   *
+   * Excluded from all of the above: the close gutter on the drawer's inner
+   * edge, which is ceded untouched to Obsidian's swipe-to-close.
    */
   const attachGesture = (
     side: Side,
@@ -170,16 +175,34 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
     let width = 1;
     let state: 'idle' | 'pending' | 'dragging' | 'released' = 'idle';
     let from = 0;
+    let ceded = false;
+
+    /**
+     * Hand this touch to Obsidian's swipe-to-close and take no further part.
+     *
+     * Both of our blocks have to come off, because they are redundant by
+     * design: the attribute asks Obsidian's producer to bail, `stopPropagation`
+     * stops it from ever running. Lifting one alone changes nothing.
+     */
+    const cede = (): void => {
+      host.removeAttribute(IGNORE_SWIPE_ATTR);
+      ceded = true;
+      state = 'released';
+    };
+
+    /** Take the opt-out back. Idempotent; a no-op for a touch that never
+     *  ceded, so every exit path can call it unconditionally. */
+    const reclaim = (): void => {
+      if (!ceded) return;
+      host.setAttribute(IGNORE_SWIPE_ATTR, 'true');
+      ceded = false;
+    };
 
     const onStart = (evt: TouchEvent): void => {
-      // Stop this touch from ever reaching Obsidian's own swipe-to-close: its
-      // listener sits on `workspace.containerEl`, an ancestor of every drawer,
-      // and fires on bubble. `data-ignore-swipe` asks it to bail once it runs
-      // — this makes sure it never runs at all for a touch that started here,
-      // which holds regardless of what its own bail-out checks do. Safe on a
-      // passive listener: `stopPropagation` is not restricted the way
-      // `preventDefault` is.
-      evt.stopPropagation();
+      // A ceded touch that never reaches `touchend` — app backgrounded under
+      // the finger — would otherwise leave the opt-out off for good. Restoring
+      // here as well as on `touchend` bounds that to a single lost tab swipe.
+      reclaim();
 
       // A second finger mid-drag, or a touchstart while the previous touch's
       // cycle has not reached 'idle' yet, is not a fresh gesture: release
@@ -204,6 +227,26 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
         state = 'released';
         return;
       }
+
+      // Deliberately AFTER the bar check, not before: the last pill runs to
+      // within a gutter's width of the inner edge, so a gutter that won here
+      // would swallow taps on it — trading one dead gesture for another.
+      const rect = host.getBoundingClientRect();
+      if (isInCloseGutter(touch.clientX - rect.left, rect.width, side)) {
+        cede();
+        return;
+      }
+
+      // Only now, for a touch we are actually going to track. Its listener
+      // sits on `workspace.containerEl`, an ancestor of every drawer, and
+      // fires on bubble; this makes sure it never runs at all, which holds
+      // regardless of what its own bail-out checks do. The paths above skip it
+      // and stay covered by `data-ignore-swipe` alone — they release the touch
+      // without moving anything, so the standing opt-out is enough. Safe on a
+      // passive listener: `stopPropagation` is not restricted the way
+      // `preventDefault` is.
+      evt.stopPropagation();
+
       startX = touch.clientX;
       startY = touch.clientY;
       lastX = touch.clientX;
@@ -256,6 +299,10 @@ export function installDrawerTabs(plugin: PortalPlugin): () => void {
     };
 
     const onEnd = (evt: TouchEvent): void => {
+      // The normal end of a ceded touch; `touchcancel` lands here too, which
+      // is what Obsidian's own drawer drag will fire once it takes over.
+      reclaim();
+
       if (state !== 'dragging') {
         state = 'idle';
         return;

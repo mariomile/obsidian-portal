@@ -4,8 +4,10 @@
  * `touchend` listeners on the drawer host; this module carries no listener
  * or edge logic of its own, only the two decisions below.
  *
- * Two decisions at two moments:
+ * Three decisions at three moments:
  *
+ * - `isInCloseGutter` runs on `touchstart`, before anything is tracked: a
+ *   touch that starts in the gutter is not ours at all.
  * - `decideClaim` runs on early `touchmove`. Once it answers `claim` or
  *   `ignore` the caller stops asking for the rest of that touch: a direction
  *   lock taken once is what keeps vertical scrolling smooth. `pending` means
@@ -15,6 +17,43 @@
 
 export type ClaimDecision = 'pending' | 'claim' | 'ignore';
 export type SnapDecision = 'next' | 'prev' | 'back';
+
+/**
+ * Width of the strip along the drawer's inner edge that stays Obsidian's.
+ *
+ * A tap target's worth, not a hairline: the gutter is invisible, so the thumb
+ * aims at it from memory and a strip narrower than a finger is one the user
+ * has to be lucky to hit. On a 402pt phone this is ~12% of the width, all of
+ * it list padding rather than content.
+ */
+export const CLOSE_GUTTER_PX = 48;
+
+/**
+ * Is this touch starting in the strip that must keep Obsidian's own
+ * swipe-to-close?
+ *
+ * A phone drawer is full-width, so it has no backdrop to tap — the escape
+ * hatch the tab-swipe was designed around does not exist there. This strip is
+ * that backdrop, rendered as a column instead of an area: it sits on the
+ * drawer's *inner* edge (right edge for the left drawer, mirrored for the
+ * right) so the finger starts where the backdrop would be and drags across the
+ * full width to close. The outer edge would give a stunted run and collide
+ * with the system's own edge gesture.
+ *
+ * @param localX Touch x relative to the host's left edge, px.
+ * @param hostWidth Host width, px.
+ */
+export function isInCloseGutter(
+  localX: number,
+  hostWidth: number,
+  side: 'left' | 'right',
+  gutter: number = CLOSE_GUTTER_PX,
+): boolean {
+  // A host with no box cannot have a meaningful gutter, and treating one as
+  // all-gutter would hand every touch away while the drawer is unlaid-out.
+  if (hostWidth <= 0) return false;
+  return side === 'left' ? localX >= hostWidth - gutter : localX <= gutter;
+}
 
 /** px of travel before the direction lock is decided. */
 const CLAIM_THRESHOLD_PX = 8;

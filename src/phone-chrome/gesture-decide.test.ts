@@ -1,6 +1,43 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { decideClaim, decideSnap } from './gesture-decide.ts';
+import { CLOSE_GUTTER_PX, decideClaim, decideSnap, isInCloseGutter } from './gesture-decide.ts';
+
+test('isInCloseGutter puts the left drawer gutter on its inner (right) edge', () => {
+  assert.equal(isInCloseGutter(0, 400, 'left'), false);
+  assert.equal(isInCloseGutter(200, 400, 'left'), false);
+  assert.equal(isInCloseGutter(399, 400, 'left'), true);
+});
+
+test('isInCloseGutter mirrors the gutter for the right drawer', () => {
+  assert.equal(isInCloseGutter(0, 400, 'right'), true);
+  assert.equal(isInCloseGutter(200, 400, 'right'), false);
+  assert.equal(isInCloseGutter(399, 400, 'right'), false);
+});
+
+test('isInCloseGutter includes its own boundary and excludes the pixel before', () => {
+  const edge = 400 - CLOSE_GUTTER_PX;
+  assert.equal(isInCloseGutter(edge, 400, 'left'), true);
+  assert.equal(isInCloseGutter(edge - 1, 400, 'left'), false);
+  assert.equal(isInCloseGutter(CLOSE_GUTTER_PX, 400, 'right'), true);
+  assert.equal(isInCloseGutter(CLOSE_GUTTER_PX + 1, 400, 'right'), false);
+});
+
+test('isInCloseGutter claims nothing while the host has no box', () => {
+  // An unlaid-out drawer measures zero; all-gutter there would hand every
+  // touch to Obsidian and kill the tab swipe outright.
+  assert.equal(isInCloseGutter(0, 0, 'left'), false);
+  assert.equal(isInCloseGutter(0, 0, 'right'), false);
+});
+
+test('isInCloseGutter honors an explicit gutter instead of the default', () => {
+  // Expressed against the constant, not a literal: a touch one px outside the
+  // default gutter must fall inside a doubled one. Hard-coding either number
+  // would make this test fail the next time the gutter is retuned, for a
+  // reason that has nothing to do with what it checks.
+  const justOutside = 400 - CLOSE_GUTTER_PX - 1;
+  assert.equal(isInCloseGutter(justOutside, 400, 'left'), false);
+  assert.equal(isInCloseGutter(justOutside, 400, 'left', CLOSE_GUTTER_PX * 2), true);
+});
 
 test('decideClaim waits while the finger is under the threshold', () => {
   assert.equal(decideClaim(0, 0), 'pending');
