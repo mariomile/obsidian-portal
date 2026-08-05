@@ -745,37 +745,3 @@ body.is-phone .portal-section-header {
 .portal-drawer-tabs {
   touch-action: pan-y;
 }
-
-/* --- phone chrome: note header stays in the flow ---------------------------
-   With "Floating navigation" on, Obsidian takes the phone view header out of
-   the flow (`--view-header-position: fixed`) and compensates by reserving
-   `--view-top-spacing-markdown` — safe area + header height + 16px.
-
-   That reservation is padding INSIDE the scroller, so it only holds while the
-   note sits at the top: scroll, and the padding travels away with the content,
-   which then runs under the fixed header. Nothing masks the strip between the
-   two floating pills — the backdrop-filter belongs to the pills, not to the
-   band — so properties passing under it smear into an unreadable ghost.
-
-   In notes the header goes back into the flow: with nothing passing beneath
-   it, there is nothing left to mask. Everywhere else (All Docs, masonry, the
-   drawers) keeps floating.
-
-   Done by re-declaring the token rather than by writing a rule, because
-   `position` already reads `var(--view-header-position)`. Set on the markdown
-   leaf, it wins on inheritance PROXIMITY over the body-level value — no
-   specificity contest, no !important. If Obsidian ever renames the token this
-   fails silently back to native behaviour instead of breaking the layout. */
-body.is-phone.is-floating-nav
-  .mod-root
-  .workspace-leaf-content[data-type='markdown'] {
-  /* `relative`, not `static`: the header carries absolutely-positioned
-     children (the `:after` Obsidian uses for is-hidden-nav) that would
-     otherwise lose their containing block. */
-  --view-header-position: relative;
-
-  /* The old spacing would now be counted twice over: the header occupies its
-     own height, and the safe area is already inside its
-     `--view-header-top-offset`. What is left is the gap under the header. */
-  --view-top-spacing-markdown: var(--size-4-4);
-}
