@@ -760,20 +760,24 @@ body.is-phone .portal-section-header {
    nothing, and the black behind it reads as a band across the top.
 
    So the fade is not the defect and must not be touched: it is the glass. What
-   is missing is a floor beneath it. Painting the parent the same colour the
-   child already is makes the reveal land on the note's own surface instead of
-   on nothing.
+   is missing is a floor beneath it, in the note's own colour, so the reveal
+   lands on the surface instead of on nothing.
 
    Uses the token, never a literal, so it follows whatever Cosmos flavour has
    re-scoped `--background-primary` to inside `.mod-root` — the same value the
    masked child resolves, which is the whole point: the two must agree.
 
-   Not gated on `.is-floating-nav`. Everywhere else the parent is covered by an
-   opaque child, so this is invisible; gating would only add a state to reason
-   about in exchange for nothing. */
-body.is-phone
-  .workspace-split.mod-root
-  .workspace-leaf-content[data-type='markdown'] {
+   Painted on `.mod-root` and not on the markdown leaf, which is where this
+   first went (0.4.4) and did not reach: measured off a real recording the band
+   read 5/255 against the note's 19/255, and 19 × 0.25 is 4.75 — the fade's own
+   opacity, so the reveal was still landing on black. Which descendant carries
+   the surface is Obsidian's business and can move; the frame is the one box
+   guaranteed to sit behind all of them.
+
+   Not gated on `.is-floating-nav`. In every other mode an opaque child covers
+   this, so it is invisible; gating would only add a state to reason about in
+   exchange for nothing. */
+body.is-phone .workspace-split.mod-root {
   background-color: var(--background-primary);
 }
 
