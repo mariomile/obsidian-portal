@@ -7,8 +7,8 @@ import { fileIcon } from './file-icon.ts';
 
 /**
  * Tags section (U4): the vault's tags as a nested tree with subtotal counts.
- * Clicking a tag expands it inline to list the notes carrying it (toggle);
- * the sub-tag hierarchy always renders. Live via metadataCache events.
+ * Clicking a tag toggles it inline, revealing both the notes carrying it
+ * and its sub-tag children. Live via metadataCache events.
  */
 export class TagsSection {
   private readonly ctx: PortalContext;
@@ -52,14 +52,13 @@ export class TagsSection {
     row.createSpan({ cls: 'portal-count', text: String(node.count) });
     row.addEventListener('click', () => this.toggle(node.fullTag));
 
-    // Notes carrying this exact tag, listed inline when expanded.
+    // Notes carrying this exact tag and sub-tag children, both shown inline when expanded.
     if (isOpen) {
       for (const file of filesForTag(this.ctx.app, node.fullTag)) {
         this.renderNote(file.path, file.basename, depth + 1);
       }
+      for (const child of node.children) this.renderNode(child, depth + 1);
     }
-
-    for (const child of node.children) this.renderNode(child, depth + 1);
   }
 
   private renderNote(path: string, basename: string, depth: number): void {
