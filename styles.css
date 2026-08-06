@@ -746,74 +746,48 @@ body.is-phone .portal-section-header {
   touch-action: pan-y;
 }
 
-/* --- phone chrome: no top fade over the note -------------------------------
-   With floating navigation Obsidian fades note content out as it travels under
-   the header, by masking `.view-content`:
+/* --- phone chrome: the note header must not repaint itself -----------------
+   With floating navigation Obsidian makes the phone view header transparent,
+   so the note scrolls visibly beneath it:
 
-     .is-phone.is-floating-nav … .view-content { mask-image: var(--view-top-fade-mask) }
+     .is-mobile.is-floating-nav.is-phone .view-header { background-color: transparent }   (0,4,1)
 
-   That element also carries the note's background, so the mask does not fade
-   only the text — it fades the surface out from under it, and whatever sits
-   behind shows through. Here that is Cosmos's frame, #09090a, which reads as a
-   black band across the top of every note.
+   Cosmos's flavour rule paints it back:
 
-   Four releases tried to fix this by putting a floor of `--background-primary`
-   behind the hole, at three different depths. All were inert, and the flavour's
-   own scoping is why:
+     body:is(.realcraft, .linear-darker).theme-dark:not(.layout-baseline)
+       :not(.cosmos-light) .workspace-split.mod-root … .view-header
+       { background-color: var(--background-primary) }                        (0,7,1)
 
-     body.linear-darker… .workspace-split.mod-root { --background-primary: #121213 }
+   At (0,7,1) it beats the native (0,4,1), so on a phone the header becomes an
+   opaque #121213 strip the full width of the screen, sitting right at the
+   height of the back button and the nav pill. That strip is the black band.
+   Read live off the phone DOM with CSS.getMatchedStylesForNode — the cascade
+   is the whole story here, and no amount of reading stylesheets showed it.
 
-   The note's colour is declared ONLY inside `.workspace-split.mod-root`, while
-   Obsidian's phone rules address the root as a bare `.workspace > .mod-root`.
-   Outside that scope the token resolves to the body value — #09090a, the frame.
-   Every floor was painted in exactly the colour of the band it was hiding.
+   Re-assert the native intent by walking the real ancestor chain to (0,10,1),
+   which wins on specificity alone. No !important: the rule it has to beat does
+   not use one, so matching its weapon would be escalation, not a fix.
 
-   So stop depending on a colour that cannot be resolved reliably from here and
-   remove the hole instead. Content now runs to the top edge unfaded; the
-   header's own `backdrop-filter` is what softens it, and that is the glass — it
-   was never this mask.
-
-   Specificity is deliberate: the native rule is (0,5,2), so `.workspace` and
-   `.workspace-leaf` are threaded in to reach (0,6,2) and win outright rather
-   than on load order. Ungated on the nav mode, which also covers
-   `auto-full-screen` — the other state applying the same mask.
-   `-webkit-mask-image` alongside the standard property: iOS is WebKit. */
-body.is-phone
+   Deliberately NOT touching `--view-top-fade-mask`: with the header
+   transparent again the fade reveals `.workspace-tab-container`, which carries
+   the same `--background-primary` as the note, so it lands on the note's own
+   colour. Measured identical with and without it (median 32, min 18/255 either
+   way). That fade is the glass — it was never the defect, and 0.4.8 removed it
+   for nothing. */
+body.is-phone.is-floating-nav
   .workspace
-  .mod-root
+  .workspace-split.mod-root
+  .workspace-tabs
+  .workspace-tab-container
   .workspace-leaf
-  .workspace-leaf-content[data-type='markdown']
-  .view-content {
-  mask-image: none;
-  -webkit-mask-image: none;
-}
-
-/* --- phone chrome: the header band stops tinting itself --------------------
-   With floating navigation the whole header is raised, not just the controls
-   sitting in it:
-
-     .is-phone .mod-raised { background: var(--raised-background) }
-     --blur-background: color-mix(--background-primary, transparent) + gradient
-
-   so `.view-header` paints a full-width tinted strip behind the two pills.
-   Obsidian itself zeroes this the moment floating nav is off
-   (`.is-phone:not(.is-floating-nav) .view-header { --raised-background:
-   transparent }`), which is the tell that the strip belongs to the mode, not
-   to the design.
-
-   Drop the tint and the edge, keep `backdrop-filter`. They are separate
-   properties, and only the tint draws a band: what is left is a pure blur, so
-   content still shows through as it travels under — the glass survives intact,
-   which is the whole requirement.
-
-   Set on the element, never through `--raised-background`. That token would
-   inherit into the pills nested in this header and strip their glass too — the
-   one thing that must not happen. Everything here is a non-inherited property
-   for exactly that reason. */
-body.is-phone.is-floating-nav .workspace-split.mod-root .view-header {
-  background: transparent;
+  .workspace-leaf-content
+  .view-header {
+  background-color: transparent;
+  /* The raised edge goes with the fill: on a pill it is a rim, stretched
+     across the header it is the band's outline. */
   box-shadow: none;
 }
+
 
 /* The iOS edge-highlight pseudo Obsidian draws on every raised surface. On a
    pill it is a rim; stretched across the header it is the band's outline. Hit
