@@ -746,53 +746,46 @@ body.is-phone .portal-section-header {
   touch-action: pan-y;
 }
 
-/* --- phone chrome: floor under the top fade --------------------------------
-   On a phone with floating navigation, Obsidian fades note content out as it
-   travels under the header:
+/* --- phone chrome: no top fade over the note -------------------------------
+   With floating navigation Obsidian fades note content out as it travels under
+   the header, by masking `.view-content`:
 
-     .workspace-split.mod-root .view-content { background-color: var(--background-primary) }
-     .is-phone.is-floating-nav ... .view-content { mask-image: var(--view-top-fade-mask) }
-     --view-top-fade-opacity: 0.25
+     .is-phone.is-floating-nav … .view-content { mask-image: var(--view-top-fade-mask) }
 
-   The mask sits on the same element that carries the note's background, so at
-   the top it does not only fade the text — it fades the surface out from under
-   it too. The remaining 75% reveals `.workspace-leaf-content`, which paints
-   nothing, and the black behind it reads as a band across the top.
+   That element also carries the note's background, so the mask does not fade
+   only the text — it fades the surface out from under it, and whatever sits
+   behind shows through. Here that is Cosmos's frame, #09090a, which reads as a
+   black band across the top of every note.
 
-   So the fade is not the defect and must not be touched: it is the glass. What
-   is missing is a floor beneath it, in the note's own colour, so the reveal
-   lands on the surface instead of on nothing.
+   Four releases tried to fix this by putting a floor of `--background-primary`
+   behind the hole, at three different depths. All were inert, and the flavour's
+   own scoping is why:
 
-   Uses the token, never a literal, so it follows whatever Cosmos flavour has
-   re-scoped `--background-primary` to inside `.mod-root` — the same value the
-   masked child resolves, which is the whole point: the two must agree.
+     body.linear-darker… .workspace-split.mod-root { --background-primary: #121213 }
 
-   Probed live (class-injection on desktop, the Cosmos-harness pattern) after
-   two floors failed to land, and the chain settled every guess:
+   The note's colour is declared ONLY inside `.workspace-split.mod-root`, while
+   Obsidian's phone rules address the root as a bare `.workspace > .mod-root`.
+   Outside that scope the token resolves to the body value — #09090a, the frame.
+   Every floor was painted in exactly the colour of the band it was hiding.
 
-     view-content            #121213  mask: rgba(0,0,0,0) 0% → black 56px
-     workspace-leaf-content  transparent, unmasked   ← the floor goes HERE
-     …
-     mod-root                #09090a  — painted by Cosmos: this is the FRAME
+   So stop depending on a colour that cannot be resolved reliably from here and
+   remove the hole instead. Content now runs to the top edge unfaded; the
+   header's own `backdrop-filter` is what softens it, and that is the glass — it
+   was never this mask.
 
-   Three corrections that probe forced. The mask's top stop computes to alpha
-   0, not the stock 0.25 — at the very top the reveal is total. The 0.4.6
-   floor on `.mod-root` was inert: Cosmos repaints that box in the frame
-   colour at higher specificity, and #09090a is the band the recording shows.
-   And the earlier leaf floor (0.4.4) died on its `.workspace-split.mod-root`
-   qualifier — Obsidian's own phone rules never qualify the root that way,
-   and this selector now mirrors a native one letter for letter.
-
-   So: paint the masked element's direct parent, which the probe shows is
-   transparent, unmasked, and inside the same token scope — it resolves the
-   exact `--background-primary` the note itself paints, so floor and surface
-   cannot disagree.
-
-   Not gated on `.is-floating-nav`: without the mask an opaque child covers
-   this entirely, so it is invisible there; gating would only add a state to
-   reason about in exchange for nothing. */
-body.is-phone .mod-root .workspace-leaf-content[data-type='markdown'] {
-  background-color: var(--background-primary);
+   Specificity is deliberate: the native rule is (0,5,2), so `.workspace` and
+   `.workspace-leaf` are threaded in to reach (0,6,2) and win outright rather
+   than on load order. Ungated on the nav mode, which also covers
+   `auto-full-screen` — the other state applying the same mask.
+   `-webkit-mask-image` alongside the standard property: iOS is WebKit. */
+body.is-phone
+  .workspace
+  .mod-root
+  .workspace-leaf
+  .workspace-leaf-content[data-type='markdown']
+  .view-content {
+  mask-image: none;
+  -webkit-mask-image: none;
 }
 
 /* --- phone chrome: the header band stops tinting itself --------------------
