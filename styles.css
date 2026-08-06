@@ -767,17 +767,31 @@ body.is-phone .portal-section-header {
    re-scoped `--background-primary` to inside `.mod-root` — the same value the
    masked child resolves, which is the whole point: the two must agree.
 
-   Painted on `.mod-root` and not on the markdown leaf, which is where this
-   first went (0.4.4) and did not reach: measured off a real recording the band
-   read 5/255 against the note's 19/255, and 19 × 0.25 is 4.75 — the fade's own
-   opacity, so the reveal was still landing on black. Which descendant carries
-   the surface is Obsidian's business and can move; the frame is the one box
-   guaranteed to sit behind all of them.
+   Probed live (class-injection on desktop, the Cosmos-harness pattern) after
+   two floors failed to land, and the chain settled every guess:
 
-   Not gated on `.is-floating-nav`. In every other mode an opaque child covers
-   this, so it is invisible; gating would only add a state to reason about in
-   exchange for nothing. */
-body.is-phone .workspace-split.mod-root {
+     view-content            #121213  mask: rgba(0,0,0,0) 0% → black 56px
+     workspace-leaf-content  transparent, unmasked   ← the floor goes HERE
+     …
+     mod-root                #09090a  — painted by Cosmos: this is the FRAME
+
+   Three corrections that probe forced. The mask's top stop computes to alpha
+   0, not the stock 0.25 — at the very top the reveal is total. The 0.4.6
+   floor on `.mod-root` was inert: Cosmos repaints that box in the frame
+   colour at higher specificity, and #09090a is the band the recording shows.
+   And the earlier leaf floor (0.4.4) died on its `.workspace-split.mod-root`
+   qualifier — Obsidian's own phone rules never qualify the root that way,
+   and this selector now mirrors a native one letter for letter.
+
+   So: paint the masked element's direct parent, which the probe shows is
+   transparent, unmasked, and inside the same token scope — it resolves the
+   exact `--background-primary` the note itself paints, so floor and surface
+   cannot disagree.
+
+   Not gated on `.is-floating-nav`: without the mask an opaque child covers
+   this entirely, so it is invisible there; gating would only add a state to
+   reason about in exchange for nothing. */
+body.is-phone .mod-root .workspace-leaf-content[data-type='markdown'] {
   background-color: var(--background-primary);
 }
 
