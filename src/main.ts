@@ -134,6 +134,7 @@ export default class PortalPlugin extends Plugin {
       this.app.vault.on('rename', (file, oldPath) => {
         if (!(file instanceof TFolder)) return;
         const next = remapRename(this.settings.folderOrder, oldPath, file.path);
+        if (!next) return;
         this.settings.folderOrder = next;
         void this.saveSettings();
       }),

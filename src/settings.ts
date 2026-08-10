@@ -121,34 +121,25 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   drawerTabs: false,
 };
 
+const isString = (v: unknown): v is string => typeof v === 'string';
+const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every(isString);
+
 const asStringArray = (value: unknown, fallback: string[]): string[] =>
-  Array.isArray(value) && value.every((v) => typeof v === 'string')
-    ? (value as string[])
-    : fallback;
+  isStringArray(value) ? value : fallback;
 
-/** Flat string→string map, dropping any entry that isn't one. Unlike the array
- *  helper this keeps the valid pairs instead of discarding the whole object:
- *  one malformed folder icon shouldn't cost the user all the others. */
-const asStringRecord = (
+/** String-keyed map whose values pass `isValid`, dropping any entry that
+ *  doesn't. Unlike the array helper this keeps the valid pairs instead of
+ *  discarding the whole object: one malformed folder icon shouldn't cost the
+ *  user all the others, and one malformed parent entry shouldn't cost every
+ *  folder's order. */
+const asRecord = <T>(
   value: unknown,
-  fallback: Record<string, string>,
-): Record<string, string> => {
+  fallback: Record<string, T>,
+  isValid: (v: unknown) => v is T,
+): Record<string, T> => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return fallback;
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(value)) if (typeof v === 'string') out[k] = v;
-  return out;
-};
-
-/** Parent path → ordered child paths. Same per-entry tolerance as the flat map
- *  above: one malformed parent entry costs that parent's order, not every
- *  folder's. Non-existent paths need no filtering here — the order module
- *  ignores them at read time. */
-const asFolderOrder = (value: unknown, fallback: FolderOrder): FolderOrder => {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return fallback;
-  const out: FolderOrder = {};
-  for (const [k, v] of Object.entries(value)) {
-    if (Array.isArray(v) && v.every((p) => typeof p === 'string')) out[k] = v as string[];
-  }
+  const out: Record<string, T> = {};
+  for (const [k, v] of Object.entries(value)) if (isValid(v)) out[k] = v;
   return out;
 };
 
@@ -187,7 +178,7 @@ export function parseSettings(raw: unknown): PortalSettings {
       typeof data.followActiveFile === 'boolean'
         ? data.followActiveFile
         : DEFAULT_SETTINGS.followActiveFile,
-    folderOrder: asFolderOrder(data.folderOrder, DEFAULT_SETTINGS.folderOrder),
+    folderOrder: asRecord(data.folderOrder, DEFAULT_SETTINGS.folderOrder, isStringArray),
     collapsedSections: asStringArray(data.collapsedSections, DEFAULT_SETTINGS.collapsedSections),
     enabledSections: parseEnabledSections(data.enabledSections),
     sectionOrder: parseSectionOrder(data.sectionOrder),
@@ -204,7 +195,7 @@ export function parseSettings(raw: unknown): PortalSettings {
       typeof data.mvIconVariant === 'string'
         ? data.mvIconVariant
         : DEFAULT_SETTINGS.mvIconVariant,
-    folderIcons: asStringRecord(data.folderIcons, DEFAULT_SETTINGS.folderIcons),
+    folderIcons: asRecord(data.folderIcons, DEFAULT_SETTINGS.folderIcons, isString),
     mobileHeaderBack:
       typeof data.mobileHeaderBack === 'boolean'
         ? data.mobileHeaderBack

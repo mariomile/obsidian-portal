@@ -8,13 +8,19 @@ export interface Entry {
   isFolder: boolean;
 }
 
-/** Folder-first, then case-insensitive natural order (Obsidian's default). */
-export function compareEntries(a: Entry, b: Entry): number {
-  if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
+/** Case-insensitive natural order by name — Obsidian's default tie-breaker,
+ *  and the one alphabetical rule every tree ordering in Portal falls back to. */
+export function compareByName(a: { name: string }, b: { name: string }): number {
   return a.name.localeCompare(b.name, undefined, {
     numeric: true,
     sensitivity: 'base',
   });
+}
+
+/** Folder-first, then case-insensitive natural order (Obsidian's default). */
+export function compareEntries(a: Entry, b: Entry): number {
+  if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
+  return compareByName(a, b);
 }
 
 /**

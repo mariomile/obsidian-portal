@@ -1,7 +1,7 @@
 import { TFile, TFolder, setIcon } from 'obsidian';
 import type { TAbstractFile } from 'obsidian';
 import type { PortalContext } from '../types';
-import { ancestorFolderPaths, followExpandedFolders } from './folder-tree.ts';
+import { ancestorFolderPaths, compareByName, followExpandedFolders } from './folder-tree.ts';
 import { fileIcon } from './file-icon.ts';
 import { makeDraggable, makeDropTarget, makeReorderableDropTarget, moveInto } from '../nav/dnd';
 import { effectiveOrder, reorder } from './manual-order.ts';
@@ -274,14 +274,9 @@ export class FoldersSection {
    *  preserved — manual ordering is about folders, which is what a sidebar
    *  hierarchy is navigated by. */
   private sortManual(folder: TFolder): TAbstractFile[] {
-    const byPath = new Map(
-      folder.children.filter((c): c is TFolder => c instanceof TFolder).map((f) => [f.path, f]),
-    );
-    const folders = effectiveOrder(
-      this.ctx.settings.folderOrder,
-      folder.path,
-      [...byPath.values()],
-    )
+    const subfolders = folder.children.filter((c): c is TFolder => c instanceof TFolder);
+    const byPath = new Map(subfolders.map((f) => [f.path, f]));
+    const folders = effectiveOrder(this.ctx.settings.folderOrder, folder.path, subfolders)
       .map((p) => byPath.get(p))
       .filter((f): f is TFolder => Boolean(f));
     const files = folder.children
@@ -291,21 +286,18 @@ export class FoldersSection {
   }
 
   /** Move `srcPath` to just before/after `targetPath` among their shared
-   *  parent's folders. Siblings only: a cross-parent drop is a move, and the
-   *  reorder module rejects it rather than inventing a position. */
+   *  parent's folders. Siblings only, and the source has to be a folder — both
+   *  fall out of `reorder` rejecting a `srcPath` that isn't in the sibling
+   *  list it was handed, so neither needs checking here. */
   private async reorderFolder(
     srcPath: string,
     targetPath: string,
     zone: 'before' | 'after',
   ): Promise<void> {
-    const src = this.ctx.app.vault.getAbstractFileByPath(srcPath);
     const target = this.ctx.app.vault.getAbstractFileByPath(targetPath);
-    if (!(src instanceof TFolder) || !(target instanceof TFolder)) return;
+    if (!(target instanceof TFolder)) return;
     const parent = target.parent;
-    // Obsidian's root folder path is "/", not "" — compare against the real
-    // parent object, not a hardcoded sentinel (that mismatch silently no-op'd
-    // every root reorder before it was fixed).
-    if (!parent || src.parent?.path !== parent.path) return;
+    if (!parent) return;
     const siblings = parent.children.filter((c): c is TFolder => c instanceof TFolder);
     const next = reorder(
       this.ctx.settings.folderOrder,
@@ -331,10 +323,7 @@ export class FoldersSection {
       if (mode === 'modified') return b.stat.mtime - a.stat.mtime;
       if (mode === 'created') return b.stat.ctime - a.stat.ctime;
     }
-    return a.name.localeCompare(b.name, undefined, {
-      numeric: true,
-      sensitivity: 'base',
-    });
+    return compareByName(a, b);
   }
 
   /** Icon/colour overrides from frontmatter (folders read a same-named folder

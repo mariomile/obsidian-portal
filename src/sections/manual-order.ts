@@ -15,6 +15,8 @@
  * makes the order explicit, not selecting the mode.
  */
 
+import { compareByName } from './folder-tree.ts';
+
 /** A folder as the order module needs to see it: identity plus the label the
  *  alphabetical fallback sorts on. */
 export interface OrderableFolder {
@@ -25,11 +27,8 @@ export interface OrderableFolder {
 /** Persisted shape: parent folder path → its child folder paths, in order. */
 export type FolderOrder = Record<string, string[]>;
 
-const byName = (a: OrderableFolder, b: OrderableFolder): number =>
-  a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-
 const alphaPaths = (children: OrderableFolder[]): string[] =>
-  [...children].sort(byName).map((f) => f.path);
+  [...children].sort(compareByName).map((f) => f.path);
 
 /**
  * Child folder paths of `parentPath` in render order: the stored order first
@@ -88,10 +87,15 @@ const remapPath = (path: string, oldPath: string, newPath: string): string => {
 
 /**
  * Rewrite every key and entry after `oldPath` was renamed or moved to
- * `newPath`, descendants included. Without this a renamed folder silently
- * loses its position (its old path stops matching anything that exists) and
- * drops to the bottom of the alphabetical tail — which reads as Portal
- * forgetting the order the user set.
+ * `newPath`, descendants included. Returns `null` when the rename touched
+ * nothing this map knows about — like `reorder`, so the caller can skip both
+ * the assignment and the settings write. That is the common case: most vaults
+ * never turn manual order on, and every folder rename would otherwise write an
+ * unchanged blob to disk.
+ *
+ * Without the remap a renamed folder silently loses its position (its old path
+ * stops matching anything that exists) and drops to the bottom of the
+ * alphabetical tail — which reads as Portal forgetting the order the user set.
  *
  * A folder moved to a *different* parent keeps its rewritten path in its old
  * parent's list; that entry stops matching at read time and is ignored, so no
@@ -101,12 +105,16 @@ export function remapRename(
   order: FolderOrder,
   oldPath: string,
   newPath: string,
-): FolderOrder {
+): FolderOrder | null {
+  let changed = false;
+  const remap = (path: string): string => {
+    const next = remapPath(path, oldPath, newPath);
+    if (next !== path) changed = true;
+    return next;
+  };
   const out: FolderOrder = {};
   for (const [parent, children] of Object.entries(order)) {
-    out[remapPath(parent, oldPath, newPath)] = children.map((p) =>
-      remapPath(p, oldPath, newPath),
-    );
+    out[remap(parent)] = children.map(remap);
   }
-  return out;
+  return changed ? out : null;
 }

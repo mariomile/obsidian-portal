@@ -90,3 +90,11 @@ test('remapRename leaves paths that merely share a prefix alone', () => {
   const order: FolderOrder = { '/': ['Note', 'Notebook'] };
   assert.deepEqual(remapRename(order, 'Note', 'Journal'), { '/': ['Journal', 'Notebook'] });
 });
+
+test('remapRename returns null when the rename touches nothing it knows', () => {
+  // The common case: manual order was never used, or the renamed folder was
+  // never dragged. The caller skips the settings write on null.
+  assert.equal(remapRename({}, 'Old', 'New'), null);
+  assert.equal(remapRename({ '/': ['Active'] }, 'Elsewhere', 'Renamed'), null);
+  assert.equal(remapRename({ '/': ['Note'] }, 'Notebook', 'Journal'), null);
+});
