@@ -59,11 +59,11 @@ export function makeDropTarget(
 export type DropZone = 'before' | 'after' | 'into';
 
 /**
- * Root-level folder rows (task: manual reordering): the same row accepts
- * both "drop into" (middle band) and "drop before/after" (top/bottom edges,
- * Craft/Finder-style insertion line) — the caller decides what each zone
- * means via `onDrop`. Kept separate from `makeDropTarget` so every other
- * row (nested folders, the root container) is unaffected.
+ * Folder rows in `manual` sort mode: the same row accepts both "drop into"
+ * (middle band) and "drop before/after" (top/bottom edges, Craft/Finder-style
+ * insertion line) — the caller decides what each zone means via `onDrop`.
+ * Kept separate from `makeDropTarget` so rows in a derived sort mode, and the
+ * root container, stay move-only.
  */
 export function makeReorderableDropTarget(
   rowEl: HTMLElement,

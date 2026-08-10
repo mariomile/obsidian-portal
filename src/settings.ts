@@ -9,8 +9,11 @@ import {
   parseSectionOrder,
   type PortalSectionKey,
 } from './section-config';
+import type { FolderOrder } from './sections/manual-order';
 
-export type SortMode = 'name' | 'modified' | 'created';
+/** `manual` is the only mode the user can drag: in the other three the folder
+ *  tree is derived, so a dropped row would snap straight back. */
+export type SortMode = 'name' | 'modified' | 'created' | 'manual';
 
 export interface PortalSettings {
   /** Folder-tree file ordering (folders always sort by name, first). */
@@ -36,10 +39,11 @@ export interface PortalSettings {
    *  the active file is only highlighted if its row is already visible (use
    *  the toolbar's "Reveal active file" action to force the full path open). */
   followActiveFile: boolean;
-  /** Manual sort order for the vault root's direct child folders (paths).
-   *  Folders not listed here sort alphabetically after the ones that are —
-   *  populated lazily on the first drag-reorder, never written eagerly. */
-  folderOrder: string[];
+  /** Manual folder order, keyed by parent folder path (the vault root is `/`),
+   *  so it applies at every depth. Read only when `sortBy` is `manual`.
+   *  Folders not listed under their parent sort alphabetically after the ones
+   *  that are — populated lazily on the first drag-reorder, never eagerly. */
+  folderOrder: FolderOrder;
   /** Rail section keys (lower-cased, e.g. 'tags') that are collapsed. Default
    *  empty → every section starts expanded, so a fresh install never hides a
    *  user's content; a section is added here only when the user folds it. */
@@ -102,7 +106,7 @@ export const DEFAULT_SETTINGS: PortalSettings = {
   hideHexTags: true,
   focusExistingTab: true,
   followActiveFile: false,
-  folderOrder: [],
+  folderOrder: {},
   collapsedSections: [],
   enabledSections: [...PORTAL_SECTION_KEYS],
   sectionOrder: [...PORTAL_SECTION_KEYS],
@@ -135,6 +139,19 @@ const asStringRecord = (
   return out;
 };
 
+/** Parent path → ordered child paths. Same per-entry tolerance as the flat map
+ *  above: one malformed parent entry costs that parent's order, not every
+ *  folder's. Non-existent paths need no filtering here — the order module
+ *  ignores them at read time. */
+const asFolderOrder = (value: unknown, fallback: FolderOrder): FolderOrder => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return fallback;
+  const out: FolderOrder = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (Array.isArray(v) && v.every((p) => typeof p === 'string')) out[k] = v as string[];
+  }
+  return out;
+};
+
 /** Defensive parse of persisted data — every field falls back to its default. */
 export function parseSettings(raw: unknown): PortalSettings {
   // `hugeCoreIcons` is a legacy field name (pre-mvIcons rename) that can
@@ -143,7 +160,9 @@ export function parseSettings(raw: unknown): PortalSettings {
   // widening the settings interface for a one-time migration read below.
   const data = (raw ?? {}) as Partial<PortalSettings> & { hugeCoreIcons?: unknown };
   const sortBy: SortMode =
-    data.sortBy === 'modified' || data.sortBy === 'created' ? data.sortBy : 'name';
+    data.sortBy === 'modified' || data.sortBy === 'created' || data.sortBy === 'manual'
+      ? data.sortBy
+      : 'name';
   return {
     sortBy,
     hideNativeExplorer:
@@ -168,7 +187,7 @@ export function parseSettings(raw: unknown): PortalSettings {
       typeof data.followActiveFile === 'boolean'
         ? data.followActiveFile
         : DEFAULT_SETTINGS.followActiveFile,
-    folderOrder: asStringArray(data.folderOrder, DEFAULT_SETTINGS.folderOrder),
+    folderOrder: asFolderOrder(data.folderOrder, DEFAULT_SETTINGS.folderOrder),
     collapsedSections: asStringArray(data.collapsedSections, DEFAULT_SETTINGS.collapsedSections),
     enabledSections: parseEnabledSections(data.enabledSections),
     sectionOrder: parseSectionOrder(data.sectionOrder),

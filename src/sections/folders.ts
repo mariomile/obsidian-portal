@@ -4,6 +4,7 @@ import type { PortalContext } from '../types';
 import { ancestorFolderPaths, followExpandedFolders } from './folder-tree.ts';
 import { fileIcon } from './file-icon.ts';
 import { makeDraggable, makeDropTarget, makeReorderableDropTarget, moveInto } from '../nav/dnd';
+import { effectiveOrder, reorder } from './manual-order.ts';
 import { mvHasIcon } from '../kit/mv-icons';
 
 /** Render the most specific icon available for a row, in priority order:
@@ -247,11 +248,11 @@ export class FoldersSection {
     depth: number,
     filter: Filter | null,
   ): void {
-    // Root's direct children respect manual folder order (task: drag-reorder);
-    // everything deeper keeps the plain alpha/modified/created sort.
+    // In `manual` mode folders follow the user's drag order at every depth;
+    // files keep the derived sort underneath them.
     const sorted =
-      depth === 0
-        ? this.sortRootChildren(folder)
+      this.ctx.settings.sortBy === 'manual'
+        ? this.sortManual(folder)
         : [...folder.children].sort((a, b) => this.compareChildren(a, b));
     const hidden = this.ctx.settings.hiddenFolders;
     for (const child of sorted) {
@@ -268,62 +269,53 @@ export class FoldersSection {
     }
   }
 
-  /** Root folders in `folderOrder` first (drag-reorder), any folder not yet
-   *  in that list falls back to alpha order after the ones that are; files
-   *  keep the regular sort mode. `folderOrder` is read-only here — it's
-   *  seeded/written only by `reorderRootFolder`, never by rendering. */
-  private sortRootChildren(root: TFolder): TAbstractFile[] {
+  /** `manual` mode: sub-folders in the user's drag order (alpha for the ones
+   *  never dragged), then files by the regular derived sort. Folders-first is
+   *  preserved — manual ordering is about folders, which is what a sidebar
+   *  hierarchy is navigated by. */
+  private sortManual(folder: TFolder): TAbstractFile[] {
     const byPath = new Map(
-      root.children
-        .filter((c): c is TFolder => c instanceof TFolder)
-        .map((f) => [f.path, f] as const),
+      folder.children.filter((c): c is TFolder => c instanceof TFolder).map((f) => [f.path, f]),
     );
-    const folders = this.rootFolderOrder(root)
+    const folders = effectiveOrder(
+      this.ctx.settings.folderOrder,
+      folder.path,
+      [...byPath.values()],
+    )
       .map((p) => byPath.get(p))
       .filter((f): f is TFolder => Boolean(f));
-    const files = root.children
+    const files = folder.children
       .filter((c): c is TFile => c instanceof TFile)
       .sort((a, b) => this.compareChildren(a, b));
     return [...folders, ...files];
   }
 
-  /** Effective root-folder paths in render order: `folderOrder` entries
-   *  first (only the ones that still exist), then any folder Portal hasn't
-   *  learned an explicit position for yet, alpha-sorted. */
-  private rootFolderOrder(root: TFolder): string[] {
-    const rootFolders = root.children.filter((c): c is TFolder => c instanceof TFolder);
-    const alpha = (list: TFolder[]): string[] =>
-      [...list]
-        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
-        .map((f) => f.path);
-    const order = this.ctx.settings.folderOrder;
-    if (order.length === 0) return alpha(rootFolders);
-    const known = new Set(rootFolders.map((f) => f.path));
-    const ordered = order.filter((p) => known.has(p));
-    const missing = alpha(rootFolders.filter((f) => !ordered.includes(f.path)));
-    return [...ordered, ...missing];
-  }
-
-  /** Move `srcPath` (a root folder) to just before/after `targetPath` in the
-   *  manual order — seeds `folderOrder` from the current effective order on
-   *  first use, so a fresh vault's alpha order is preserved as the base. */
-  private async reorderRootFolder(
+  /** Move `srcPath` to just before/after `targetPath` among their shared
+   *  parent's folders. Siblings only: a cross-parent drop is a move, and the
+   *  reorder module rejects it rather than inventing a position. */
+  private async reorderFolder(
     srcPath: string,
     targetPath: string,
     zone: 'before' | 'after',
   ): Promise<void> {
-    if (srcPath === targetPath) return;
-    const root = this.ctx.app.vault.getRoot();
     const src = this.ctx.app.vault.getAbstractFileByPath(srcPath);
+    const target = this.ctx.app.vault.getAbstractFileByPath(targetPath);
+    if (!(src instanceof TFolder) || !(target instanceof TFolder)) return;
+    const parent = target.parent;
     // Obsidian's root folder path is "/", not "" — compare against the real
-    // root, not a hardcoded sentinel (that mismatch silently no-op'd every
-    // reorder before this fix).
-    if (!(src instanceof TFolder) || src.parent?.path !== root.path) return;
-    const current = this.rootFolderOrder(root);
-    const next = current.filter((p) => p !== srcPath);
-    const idx = next.indexOf(targetPath);
-    if (idx === -1) return;
-    next.splice(zone === 'after' ? idx + 1 : idx, 0, srcPath);
+    // parent object, not a hardcoded sentinel (that mismatch silently no-op'd
+    // every root reorder before it was fixed).
+    if (!parent || src.parent?.path !== parent.path) return;
+    const siblings = parent.children.filter((c): c is TFolder => c instanceof TFolder);
+    const next = reorder(
+      this.ctx.settings.folderOrder,
+      parent.path,
+      siblings,
+      srcPath,
+      targetPath,
+      zone,
+    );
+    if (!next) return;
     this.ctx.settings.folderOrder = next;
     await this.ctx.saveSettings();
     this.render();
@@ -388,15 +380,16 @@ export class FoldersSection {
       void this.toggleFolder(folder.path);
     });
     makeDraggable(row, folder.path);
-    // Root folders get before/after drop zones for manual reordering, on top
-    // of the regular "drop into" move; nested folders keep move-only (scope:
-    // "at least the top level" — deeper reordering wasn't asked for).
-    if (depth === 0 && !filter) {
+    // Only `manual` mode gets before/after drop zones, at every depth: in a
+    // derived sort a dropped row would snap straight back, so offering the
+    // insertion line there would be a lie. While filtering, the tree isn't
+    // showing the real sibling set, so reordering is off too.
+    if (this.ctx.settings.sortBy === 'manual' && !filter) {
       makeReorderableDropTarget(row, (srcPath, zone) => {
         if (zone === 'into') {
           void moveInto(this.ctx.app, srcPath, folder.path, () => this.render());
         } else {
-          void this.reorderRootFolder(srcPath, folder.path, zone);
+          void this.reorderFolder(srcPath, folder.path, zone);
         }
       });
     } else {

@@ -1,5 +1,6 @@
-import { Plugin } from 'obsidian';
+import { Plugin, TFolder } from 'obsidian';
 import type { WorkspaceLeaf } from 'obsidian';
+import { remapRename } from './sections/manual-order';
 import { installMvIcons, refreshRenderedIcons } from './kit/mv-icons';
 import { writeIconDiagnostics } from './icons/diagnostics';
 import { installBootSnippet } from './icons/boot-snippet';
@@ -124,6 +125,19 @@ export default class PortalPlugin extends Plugin {
       this.app.workspace.on('active-leaf-change', () => this.scheduleIconRefresh()),
     );
     this.registerEvent(this.app.workspace.on('file-open', () => this.scheduleIconRefresh()));
+
+    // Keep the manual folder order pointing at the folders it was set on.
+    // Registered on the plugin, not on the view: a rename that happens while
+    // the rail is closed would otherwise drop the folder out of its position
+    // permanently, which reads as Portal forgetting the order.
+    this.registerEvent(
+      this.app.vault.on('rename', (file, oldPath) => {
+        if (!(file instanceof TFolder)) return;
+        const next = remapRename(this.settings.folderOrder, oldPath, file.path);
+        this.settings.folderOrder = next;
+        void this.saveSettings();
+      }),
+    );
 
     // Open the rail and apply the hide only once the workspace is ready — this
     // also guards later units against the create-event storm on vault load.

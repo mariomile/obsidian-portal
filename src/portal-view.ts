@@ -414,6 +414,7 @@ export class PortalView extends ItemView {
       { value: 'name', label: 'Name' },
       { value: 'modified', label: 'Modified time' },
       { value: 'created', label: 'Created time' },
+      { value: 'manual', label: 'Manual (drag to reorder)' },
     ];
     const menu = new Menu();
     for (const option of options) {

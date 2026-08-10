@@ -14,7 +14,7 @@ Part of the marioverse Obsidian plugin suite.
 ## Features
 
 - **One unified rail**: a fixed nav block (New document · All Docs · Tasks · Calendar, each delegating to the relevant suite plugin), then **Pinned · Bookmarks · Recent · Folders · Tags · Collections** — every section collapsible and persisted.
-- **Folder tree**: lazy (only expanded folders render), live on create/delete/rename, with folder-first sorting by name / modified / created.
+- **Folder tree**: lazy (only expanded folders render), live on create/delete/rename, with folder-first sorting by name / modified / created — or **Manual**, where folders are dragged into any order you like, at every depth, and the order survives renames.
 - **File-type icons**: ~50 extensions map to distinct icons; a note's `icon:` / `color:` frontmatter overrides them, and folders read the same keys from a same-named folder note.
 - **Tags & Collections inline**: click a tag to list its notes; click a collection (absorbed read-only from [SuperBaseTags](https://github.com/mariomile/obsidian-superbasetags)) to list its members, or open its Base with ⇗. Hex-colour tokens are filtered out of the tag tree.
 - **Search that shows where things are**: a jump box ranks results with [Sonar](https://github.com/mariomile/obsidian-sonar) (falls back to a substring filter), shows each hit's folder path, filters the tree live, and reveals the opened file in the tree.
