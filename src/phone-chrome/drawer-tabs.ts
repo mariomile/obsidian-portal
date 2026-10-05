@@ -55,9 +55,11 @@ const IGNORE_SWIPE_ATTR = 'data-ignore-swipe';
 /** Which side a mounted bar belongs to. */
 type Side = 'left' | 'right';
 
+/** Obsidian 1.14 names the drawers by role (`mod-primary` on the left in a
+ *  left-to-right layout), no longer by side. */
 const HOST_SELECTOR: Record<Side, string> = {
-  left: '.workspace-drawer.mod-left .workspace-drawer-active-tab-container',
-  right: '.workspace-drawer.mod-right .workspace-drawer-active-tab-container',
+  left: '.workspace-drawer.mod-primary .workspace-drawer-active-tab-container',
+  right: '.workspace-drawer.mod-secondary .workspace-drawer-active-tab-container',
 };
 
 interface Mounted {
