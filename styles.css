@@ -170,7 +170,7 @@
   min-height: 28px;
   padding: 3px 12px;
   padding-inline-start: calc(12px + var(--portal-depth, 0) * var(--portal-indent));
-  border-radius: 7px;
+  border-radius: var(--radius-s, 7px);
   cursor: var(--cursor, pointer);
   color: var(--text-normal);
   /* Long-press opens Portal's own menu (see portal-view.ts); without this
@@ -400,7 +400,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-s, 6px);
   cursor: var(--cursor, pointer);
   transition: background-color var(--portal-wash-motion);
 }
