@@ -172,7 +172,9 @@
   padding-inline-start: calc(12px + var(--portal-depth, 0) * var(--portal-indent));
   border-radius: var(--radius-s, 7px);
   cursor: var(--cursor, pointer);
-  color: var(--text-normal);
+  /* Same colour as the native file explorer's rows, so the theme that styles
+     one styles the other. Obsidian's defaults resolve to text-muted. */
+  color: var(--nav-item-color, var(--text-muted));
   /* Long-press opens Portal's own menu (see portal-view.ts); without this
      iOS races it with the text-selection callout on the row's label. */
   user-select: none;
@@ -191,13 +193,14 @@
 @media (hover: hover) {
   .portal-tree-row:hover {
     background-color: var(--portal-wash);
+    color: var(--nav-item-color-hover, var(--text-normal));
   }
 }
 /* Selection = a filled rounded pill with weight (Craft convention), NOT accent
    text — the fill carries the state so the rail stays calm. */
 .portal-file.is-active {
   background-color: var(--portal-wash-strong);
-  color: var(--text-normal);
+  color: var(--nav-item-color-active, var(--text-normal));
   font-weight: var(--font-medium, 500);
 }
 /* Keyboard cursor — a ring, distinct from hover fill and active selection. */
@@ -486,7 +489,7 @@
   font-weight: var(--font-medium, 500);
 }
 .portal-nav-row .portal-row-icon {
-  color: var(--text-normal);
+  color: var(--icon-color, var(--text-muted));
 }
 /* Calendar's hover-reveal shortcut straight to today's note — same ⇗
    affordance as .portal-collection-open, kept as its own class since it
