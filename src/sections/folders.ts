@@ -6,6 +6,7 @@ import { fileIcon } from './file-icon.ts';
 import { makeDraggable, makeDropTarget, makeReorderableDropTarget, moveInto } from '../nav/dnd';
 import { effectiveOrder, reorder } from './manual-order.ts';
 import { mvHasIcon } from '../kit/mv-icons';
+import { openFromPortal } from '../nav/open-file';
 
 /** Render the most specific icon available for a row, in priority order:
  *  `decor.icon` (Portal's own frontmatter override) → the `folderIcons` setting
@@ -172,7 +173,7 @@ export class FoldersSection {
         if (!this.cursorPath) break;
         const target = this.ctx.app.vault.getAbstractFileByPath(this.cursorPath);
         if (target instanceof TFile) {
-          void this.ctx.app.workspace.getLeaf(false).openFile(target);
+          void openFromPortal(this.ctx.app, target);
         } else if (target instanceof TFolder) {
           void this.toggleFolder(target.path);
         }
@@ -416,7 +417,7 @@ export class FoldersSection {
         return;
       }
       this.clearSelection();
-      void this.ctx.app.workspace.getLeaf(false).openFile(file);
+      void openFromPortal(this.ctx.app, file);
     });
     makeDraggable(row, file.path);
   }

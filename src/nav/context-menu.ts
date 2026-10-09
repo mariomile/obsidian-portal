@@ -1,5 +1,6 @@
 import { FuzzySuggestModal, Menu, Notice, TFile, TFolder } from 'obsidian';
 import type { App, TAbstractFile } from 'obsidian';
+import { openFromPortal } from './open-file';
 
 /** Actions the rail supplies to the menu (pin state, inline rename). */
 export interface MenuActions {
@@ -130,7 +131,7 @@ function uniquePath(app: App, dir: string, base: string, ext?: string): string {
 export async function createNote(app: App, parent: TFolder | null): Promise<void> {
   const path = uniquePath(app, parent?.path ?? '', 'Untitled', 'md');
   const file = await app.vault.create(path, '');
-  await app.workspace.getLeaf(false).openFile(file);
+  await openFromPortal(app, file);
 }
 
 export async function createFolder(app: App, parent: TFolder | null): Promise<void> {

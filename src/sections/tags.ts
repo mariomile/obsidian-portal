@@ -4,6 +4,7 @@ import { buildTagTree, isLikelyHexColor, type TagNode } from './tag-tree.ts';
 import { getVaultTags } from '../obsidian-internals';
 import { filesForTag } from './tag-files.ts';
 import { fileIcon } from './file-icon.ts';
+import { openFromPortal } from '../nav/open-file';
 
 /**
  * Tags section (U4): the vault's tags as a nested tree with subtotal counts.
@@ -72,7 +73,7 @@ export class TagsSection {
     row.addEventListener('click', (event) => {
       event.stopPropagation();
       const file = this.ctx.app.vault.getAbstractFileByPath(path);
-      if (file instanceof TFile) void this.ctx.app.workspace.getLeaf(false).openFile(file);
+      if (file instanceof TFile) void openFromPortal(this.ctx.app, file);
     });
   }
 
