@@ -81,7 +81,7 @@ export class CollectionsSection {
 
   private renderMember(path: string, basename: string): void {
     const row = this.containerEl.createDiv({ cls: 'portal-tree-row portal-file' });
-    row.style.setProperty('--portal-depth', '1');
+    row.setCssProps({ '--portal-depth': '1' });
     row.dataset.path = path;
     row.createSpan({ cls: 'portal-twisty portal-twisty-empty' });
     const icon = row.createSpan({ cls: 'portal-row-icon' });
