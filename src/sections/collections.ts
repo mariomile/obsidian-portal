@@ -8,6 +8,7 @@ import {
   type Collection,
 } from '../integrations/superbasetags';
 import { fileIcon } from './file-icon.ts';
+import { openFromPortal } from '../nav/open-file';
 
 /**
  * Collections section (U5): the `#type/*` collections absorbed from
@@ -89,7 +90,7 @@ export class CollectionsSection {
     row.addEventListener('click', (event) => {
       event.stopPropagation();
       const file = this.ctx.app.vault.getAbstractFileByPath(path);
-      if (file instanceof TFile) void this.ctx.app.workspace.getLeaf(false).openFile(file);
+      if (file instanceof TFile) void openFromPortal(this.ctx.app, file);
     });
   }
 

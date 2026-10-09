@@ -2,6 +2,7 @@ import { TFile, setIcon } from 'obsidian';
 import type { PortalContext } from '../types';
 import { getBookmarks } from '../obsidian-internals';
 import { fileIcon } from './file-icon.ts';
+import { openFromPortal } from '../nav/open-file';
 
 /**
  * Bookmarks section: the vault's native (core-plugin) bookmarks — Craft's
@@ -37,7 +38,7 @@ export class BookmarksSection {
       row.createSpan({ cls: 'portal-label', text: bookmark.title });
       row.addEventListener('click', () => {
         const file = this.ctx.app.vault.getAbstractFileByPath(bookmark.path);
-        if (file instanceof TFile) void this.ctx.app.workspace.getLeaf(false).openFile(file);
+        if (file instanceof TFile) void openFromPortal(this.ctx.app, file);
       });
     }
   }

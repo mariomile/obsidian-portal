@@ -1,6 +1,7 @@
 import { TFile, TFolder, setIcon } from 'obsidian';
 import type { PortalContext } from '../types';
 import { fileIcon } from './file-icon.ts';
+import { openFromPortal } from '../nav/open-file';
 
 const RECENT_LIMIT = 15;
 
@@ -45,7 +46,7 @@ export class PinnedSection {
         const label = file.extension === 'md' ? file.basename : file.name;
         row.createSpan({ cls: 'portal-label', text: label });
         row.addEventListener('click', () => {
-          void this.ctx.app.workspace.getLeaf(false).openFile(file);
+          void openFromPortal(this.ctx.app, file);
         });
       } else if (file) {
         // Folder pin — label only for now (folder reveal lands with the tree).
@@ -127,7 +128,7 @@ export class RecentSection {
       const label = file.extension === 'md' ? file.basename : file.name;
       row.createSpan({ cls: 'portal-label', text: label });
       row.addEventListener('click', () => {
-        void this.ctx.app.workspace.getLeaf(false).openFile(file);
+        void openFromPortal(this.ctx.app, file);
       });
     }
     if (rendered === 0) {

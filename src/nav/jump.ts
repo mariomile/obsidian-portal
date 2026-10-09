@@ -1,6 +1,7 @@
 import { TFile, debounce, setIcon } from 'obsidian';
 import type { PortalContext } from '../types';
 import { isSonarPresent, sonarQuery, type JumpHit } from '../integrations/sonar';
+import { openFromPortal } from './open-file';
 
 const FALLBACK_LIMIT = 20;
 
@@ -141,7 +142,7 @@ export class JumpInput {
     }
     const file = this.ctx.app.vault.getAbstractFileByPath(hit.path);
     if (file instanceof TFile) {
-      void this.ctx.app.workspace.getLeaf(false).openFile(file);
+      void openFromPortal(this.ctx.app, file);
       // Highlight where the file lives in the Folders tree.
       this.onReveal(hit.path);
       this.setOpen(false);
