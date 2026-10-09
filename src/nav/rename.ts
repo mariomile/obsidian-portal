@@ -21,8 +21,7 @@ export function startInlineRename(
   if (!(label instanceof HTMLElement)) return;
 
   const original = file.name;
-  const input = document.createElement('input');
-  input.className = 'portal-rename-input';
+  const input = createEl('input', { cls: 'portal-rename-input' });
   input.value = original;
   label.replaceWith(input);
   input.focus();

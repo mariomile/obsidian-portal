@@ -74,7 +74,7 @@ export default class PortalPlugin extends Plugin {
     });
     this.addCommand({
       id: 'open-portal',
-      name: 'Open Portal',
+      name: 'Open',
       callback: () => {
         void this.activateView();
       },
@@ -174,7 +174,6 @@ export default class PortalPlugin extends Plugin {
     // Always restore the native explorer so disabling Portal never leaves it
     // permanently hidden.
     this.setExplorerHidden(false);
-    this.app.workspace.detachLeavesOfType(PORTAL_VIEW_TYPE);
   }
 
   async saveSettings(): Promise<void> {
@@ -240,7 +239,7 @@ export default class PortalPlugin extends Plugin {
   private setExplorerHidden(hidden: boolean): void {
     for (const leaf of this.app.workspace.getLeavesOfType(FILE_EXPLORER_TYPE)) {
       const leafEl =
-        (leaf.view.containerEl.closest('.workspace-leaf') as HTMLElement | null) ??
+        leaf.view.containerEl.closest<HTMLElement>('.workspace-leaf') ??
         leaf.view.containerEl;
       leafEl.toggleClass(HIDDEN_LEAF_CLASS, hidden);
     }
@@ -255,12 +254,12 @@ export default class PortalPlugin extends Plugin {
       (l) => l.getRoot() === workspace.leftSplit || l.getRoot() === workspace.rightSplit,
     );
     if (sidebarLeaf) {
-      if (reveal) workspace.revealLeaf(sidebarLeaf);
+      if (reveal) await workspace.revealLeaf(sidebarLeaf);
       return;
     }
     const leaf = workspace.getLeftLeaf(false);
     if (!leaf) return;
     await leaf.setViewState({ type: PORTAL_VIEW_TYPE, active: reveal });
-    if (reveal) workspace.revealLeaf(leaf);
+    if (reveal) await workspace.revealLeaf(leaf);
   }
 }

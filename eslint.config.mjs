@@ -6,6 +6,7 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
+  ...obsidianmd.configs.recommended,
   {
     files: ['src/**/*.ts'],
     languageOptions: {
@@ -25,6 +26,14 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/no-explicit-any': 'error',
       'no-console': ['error', { allow: ['error', 'warn'] }],
+    },
+  },
+  {
+    // Tests run under node:test, never inside Obsidian, and are not shipped.
+    files: ['src/**/*.test.ts'],
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'off',
+      'obsidianmd/no-nodejs-modules': 'off',
     },
   },
   {
