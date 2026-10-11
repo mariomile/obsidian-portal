@@ -9,7 +9,7 @@ Part of the marioverse Obsidian plugin suite.
 <p align="center">
   <img src="docs/rail.png" width="900" alt="Portal — the unified sidebar rail" />
 </p>
-<p align="center"><em>Pinned, Bookmarks, Recent, Folders, Tags and Collections in one quiet rail.</em></p>
+<p align="center"><em>The nav block, Pinned, Bookmarks, Recent and Folders in one quiet rail, with Tags and Collections further down.</em></p>
 
 ## Features
 
