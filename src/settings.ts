@@ -243,7 +243,7 @@ export class PortalSettingTab extends PluginSettingTab {
           // CC BY, unlike a permissive licence, requires the credit to travel
           // with the artwork wherever it is displayed — so it belongs here, in
           // front of anyone enabling the set, not only in the repository.
-          const credit = frag.createEl('span', { cls: 'portal-credit' });
+          const credit = frag.createSpan({ cls: 'portal-credit' });
           credit.appendText('Icons by ');
           credit.createEl('a', {
             text: 'Solar Icon Set',
@@ -367,7 +367,7 @@ export class PortalSettingTab extends PluginSettingTab {
           }),
       );
 
-    containerEl.createEl('h3', { text: 'Sections' });
+    new Setting(containerEl).setName('Sections').setHeading();
     containerEl.createEl('p', {
       cls: 'setting-item-description',
       text: 'Choose which sections appear in Portal and move them into the order you prefer.',

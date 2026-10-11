@@ -17,7 +17,7 @@ export function filesForTag(app: App, fullTag: string, limit = 100): TaggedFile[
 
     const tags = new Set<string>();
     for (const entry of cache.tags ?? []) tags.add(entry.tag.replace(/^#/, ''));
-    const fmTags = cache.frontmatter?.tags;
+    const fmTags: unknown = cache.frontmatter?.tags;
     if (typeof fmTags === 'string') {
       tags.add(fmTags.replace(/^#/, ''));
     } else if (Array.isArray(fmTags)) {

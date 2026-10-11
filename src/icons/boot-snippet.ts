@@ -25,7 +25,6 @@ import type { App } from 'obsidian';
  */
 
 const SNIPPET_NAME = 'mv-icons-boot';
-const SNIPPET_PATH = `.obsidian/snippets/${SNIPPET_NAME}.css`;
 
 /** Obsidian's snippet manager. Not in the public API, so every call is
  *  optional: a version that renames these leaves the snippet un-enabled rather
@@ -50,8 +49,11 @@ export async function installBootSnippet(
 ): Promise<'written' | 'current' | 'failed'> {
   try {
     const adapter = app.vault.adapter;
-    const exists = await adapter.exists(SNIPPET_PATH);
-    const current = exists ? await adapter.read(SNIPPET_PATH) : '';
+    // The config folder is `.obsidian` by default but user-configurable.
+    const snippetsDir = `${app.vault.configDir}/snippets`;
+    const snippetPath = `${snippetsDir}/${SNIPPET_NAME}.css`;
+    const exists = await adapter.exists(snippetPath);
+    const current = exists ? await adapter.read(snippetPath) : '';
     // The marker the freshly built CSS carries. Comparing against it — rather
     // than against a stamp assembled here — means the file is rewritten
     // whenever anything about its contents changes, including the list of
@@ -63,10 +65,10 @@ export async function installBootSnippet(
 
     if (!current.includes(`[${stamp}]`)) {
       const stamped = css.replace(`[${marker}]`, `[${stamp}]`);
-      if (!(await adapter.exists('.obsidian/snippets'))) {
-        await adapter.mkdir('.obsidian/snippets');
+      if (!(await adapter.exists(snippetsDir))) {
+        await adapter.mkdir(snippetsDir);
       }
-      await adapter.write(SNIPPET_PATH, stamped);
+      await adapter.write(snippetPath, stamped);
 
       const manager = (app as App & { customCss?: CustomCss }).customCss;
       manager?.readSnippets?.();

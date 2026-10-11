@@ -3,7 +3,7 @@
   "name": "Portal",
   "version": "0.6.0",
   "minAppVersion": "1.14.0",
-  "description": "A Craft-style unified navigator: folders, tags, and collections in one sidebar rail. Optionally re-skins Obsidian's icons with a unified set.",
+  "description": "A Craft-style unified navigator: folders, tags, and collections in one sidebar rail. Optionally re-skins the app's icons with a unified set.",
   "author": "Mario Miletta",
   "isDesktopOnly": false
 }

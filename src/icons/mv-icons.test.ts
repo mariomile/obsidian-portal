@@ -124,7 +124,7 @@ test('the snippet is written where the timing works', () => {
   // late moment as the JS. Only .obsidian/snippets is applied with the theme,
   // which is the entire reason this file exists.
   const installer = readFileSync(new URL('../icons/boot-snippet.ts', import.meta.url), 'utf8');
-  assert.match(installer, /\.obsidian\/snippets/);
+  assert.match(installer, /\$\{app\.vault\.configDir\}\/snippets/);
   // Updating the file must not silently re-enable one the user turned off.
   assert.match(installer, /if \(!exists\) manager\?\.setCssEnabledStatus/);
 });
