@@ -26,7 +26,8 @@ import {
   openPinItemModal,
 } from './nav/section-actions';
 import type { TAbstractFile } from 'obsidian';
-import { PORTAL_SECTION_LABELS, type PortalSectionKey } from './section-config';
+import { sectionLabel, type PortalSectionKey } from './section-config';
+import { OpenSection } from './sections/open';
 
 export const PORTAL_VIEW_TYPE = 'portal';
 
@@ -42,6 +43,7 @@ export class PortalView extends ItemView {
   private pinned: PinnedSection | null = null;
   private recent: RecentSection | null = null;
   private bookmarks: BookmarksSection | null = null;
+  private openTabs: OpenSection | null = null;
   private renderScope: Component | null = null;
 
   constructor(leaf: WorkspaceLeaf, ctx: PortalContext) {
@@ -78,6 +80,7 @@ export class PortalView extends ItemView {
     this.pinned = null;
     this.recent = null;
     this.bookmarks = null;
+    this.openTabs = null;
     this.contentEl.empty();
     this.contentEl.addClass('portal-rail');
 
@@ -92,7 +95,7 @@ export class PortalView extends ItemView {
     const scrollEl = this.contentEl.createDiv({ cls: 'portal-rail-scroll' });
     jump.mount(scrollEl);
     // App destinations stay prominent; search is secondary behind its toolbar icon.
-    mountNavBlock(this.app, scrollEl);
+    mountNavBlock(this.app, scrollEl, this.ctx.settings.navItems);
 
     // Delegated context menu (U8): any row carrying a data-path opens the menu.
     scope.registerDomEvent(this.contentEl, 'contextmenu', (event: MouseEvent) => {
@@ -195,7 +198,7 @@ export class PortalView extends ItemView {
           'aria-expanded': String(!section.hasClass('is-collapsed')),
         },
       });
-      header.createSpan({ cls: 'portal-section-title', text: PORTAL_SECTION_LABELS[key] });
+      header.createSpan({ cls: 'portal-section-title', text: sectionLabel(this.ctx.settings, key) });
       const actions = header.createDiv({ cls: 'portal-section-actions' });
       const addAction = this.sectionAddAction(key);
       if (addAction) {
@@ -299,6 +302,15 @@ export class PortalView extends ItemView {
     if (bookmarksBody) {
       this.bookmarks = new BookmarksSection(this.ctx, bookmarksBody);
       this.bookmarks.render();
+    }
+    const openBody = bodies.get('open');
+    if (openBody) {
+      this.openTabs = new OpenSection(this.ctx, openBody);
+      this.openTabs.render();
+      const rerenderOpen = debounce(() => this.openTabs?.render(), 50, true);
+      scope.registerEvent(this.app.workspace.on('layout-change', rerenderOpen));
+      scope.registerEvent(this.app.workspace.on('active-leaf-change', rerenderOpen));
+      scope.registerEvent(this.app.workspace.on('file-open', rerenderOpen));
     }
     const recentBody = bodies.get('recent');
     if (recentBody) {
@@ -438,6 +450,7 @@ export class PortalView extends ItemView {
       case 'collections':
         return { label: 'Create collection', run: () => createCollection(this.app) };
       case 'recent':
+      case 'open':
         return null;
     }
   }
@@ -508,6 +521,7 @@ export class PortalView extends ItemView {
     this.pinned = null;
     this.recent = null;
     this.bookmarks = null;
+    this.openTabs = null;
     this.contentEl.empty();
     this.contentEl.removeClass('portal-rail');
   }

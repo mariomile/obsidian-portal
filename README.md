@@ -13,7 +13,7 @@ Part of the marioverse Obsidian plugin suite.
 
 ## Features
 
-- **One unified rail**: a fixed nav block (New document · All Docs · Tasks · Calendar, each delegating to the relevant suite plugin), then **Pinned · Bookmarks · Recent · Folders · Tags · Collections** — every section collapsible and persisted.
+- **One unified rail**: a configurable nav block (icon + label rows, each running an Obsidian command; settings let you add, remove and reorder them; default New document · All Docs · Tasks · Calendar), then **Pinned · Bookmarks · Recent · Folders · Tags · Collections · Open** (Open lists the tabs of the main area; the Collections header can be renamed) — every section collapsible and persisted.
 - **Folder tree**: lazy (only expanded folders render), live on create/delete/rename, with folder-first sorting by name / modified / created — or **Manual**, where folders are dragged into any order you like, at every depth, and the order survives renames.
 - **File-type icons**: ~50 extensions map to distinct icons; a note's `icon:` / `color:` frontmatter overrides them, and folders read the same keys from a same-named folder note.
 - **Tags & Collections inline**: click a tag to list its notes; click a collection (absorbed read-only from [SuperBaseTags](https://github.com/mariomile/obsidian-superbasetags)) to list its members, or open its Base with ⇗. Hex-colour tokens are filtered out of the tag tree.

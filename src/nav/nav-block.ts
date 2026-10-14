@@ -1,7 +1,7 @@
 import { addIcon, setIcon } from 'obsidian';
 import type { App } from 'obsidian';
-import { executeCommand, getPlugin } from '../obsidian-internals';
-import { createNote } from './context-menu';
+import { executeCommand, isCommandRegistered } from '../obsidian-internals';
+import type { NavItem } from '../settings';
 
 // Huge Icons (hugeicons.com, free/MIT, Stroke Rounded, 24x24 grid) for the
 // fixed nav-block entries. addIcon() always wraps content in a fixed
@@ -35,74 +35,19 @@ addIcon(
     '</g>',
 );
 
-interface NavEntry {
-  icon: string;
-  label: string;
-  enabled: boolean;
-  run: () => void;
-  /** Optional hover-reveal shortcut at the row's trailing edge (Craft's ⇗ pattern). */
-  action?: { icon: string; label: string; run: () => void };
-}
-
 /**
- * Craft-style fixed nav block at the very top of the rail: New document plus
- * app-level destinations that delegate to the suite plugins (only shown when
- * the target plugin is installed).
+ * Craft-style nav block at the very top of the rail: one icon + label row per
+ * configured item, each running an Obsidian command. Items whose command is
+ * not registered (plugin absent) are skipped.
  */
-export function mountNavBlock(app: App, containerEl: HTMLElement): void {
-  const entries: NavEntry[] = [
-    {
-      icon: 'hi-note-add',
-      label: 'New document',
-      enabled: true,
-      run: () => {
-        const active = app.workspace.getActiveFile();
-        void createNote(app, active?.parent ?? app.vault.getRoot());
-      },
-    },
-    {
-      icon: 'hi-file-01',
-      label: 'All Docs',
-      enabled: Boolean(getPlugin(app, 'masonry')),
-      run: () => executeCommand(app, 'masonry:open-all-docs'),
-    },
-    {
-      icon: 'hi-task',
-      label: 'Tasks',
-      enabled: Boolean(getPlugin(app, 'runway')),
-      run: () => executeCommand(app, 'runway:open-list'),
-    },
-    {
-      icon: 'hi-calendar',
-      label: 'Calendar',
-      enabled: Boolean(getPlugin(app, 'horizon')),
-      run: () => executeCommand(app, 'horizon:open-calendar'),
-      action: {
-        icon: 'target',
-        label: "Today's note",
-        run: () => executeCommand(app, 'horizon:open-today-note'),
-      },
-    },
-  ];
-
+export function mountNavBlock(app: App, containerEl: HTMLElement, items: NavItem[]): void {
   const nav = containerEl.createDiv({ cls: 'portal-nav' });
-  for (const entry of entries) {
-    if (!entry.enabled) continue;
+  for (const item of items) {
+    if (!isCommandRegistered(app, item.commandId)) continue;
     const row = nav.createDiv({ cls: 'portal-nav-row portal-tree-row' });
     const icon = row.createSpan({ cls: 'portal-row-icon' });
-    setIcon(icon, entry.icon);
-    row.createSpan({ cls: 'portal-label', text: entry.label });
-    if (entry.action) {
-      const action = row.createSpan({
-        cls: 'portal-nav-action',
-        attr: { 'aria-label': entry.action.label },
-      });
-      setIcon(action, entry.action.icon);
-      action.addEventListener('click', (event) => {
-        event.stopPropagation();
-        entry.action?.run();
-      });
-    }
-    row.addEventListener('click', entry.run);
+    setIcon(icon, item.icon);
+    row.createSpan({ cls: 'portal-label', text: item.label });
+    row.addEventListener('click', () => executeCommand(app, item.commandId));
   }
 }

@@ -8,6 +8,7 @@ import { installMobileHeaderBack } from './nav/mobile-header-back';
 import { installNoteEnter } from './nav/note-enter';
 import { installDrawerTabs } from './phone-chrome/drawer-tabs';
 import { installTabDedupe } from './nav/tab-dedupe';
+import { createNote } from './nav/context-menu';
 import { PortalView, PORTAL_VIEW_TYPE } from './portal-view';
 import {
   DEFAULT_SETTINGS,
@@ -71,6 +72,14 @@ export default class PortalPlugin extends Plugin {
 
     this.addRibbonIcon('hi-panel-left', 'Open Portal', () => {
       void this.activateView();
+    });
+    this.addCommand({
+      id: 'new-note',
+      name: 'New note next to the active note',
+      callback: () => {
+        const active = this.app.workspace.getActiveFile();
+        void createNote(this.app, active?.parent ?? this.app.vault.getRoot());
+      },
     });
     this.addCommand({
       id: 'open-portal',
