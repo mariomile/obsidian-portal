@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { inflateRawSync } from 'node:zlib';
 
 /**
  * Geometry tests for the generated icon module.
@@ -32,14 +33,29 @@ const SET = JSON.parse(readFileSync(new URL('../kit/mv-icons-set.json', import.m
   multiPath?: boolean;
 };
 
-/** Every `'name': 'body'` pair the generated module declares. The value is the
- *  glyph's whole SVG body — one or more `<path>` elements — not a bare `d`
- *  attribute: duotone glyphs are several paths at different opacities. */
+/** Every `'name': 'body'` pair the generated module declares in plain text.
+ *  The value is the glyph's whole SVG body (one or more `<path>` elements),
+ *  not a bare `d` attribute: duotone glyphs are several paths at different
+ *  opacities. Bodies start with `<`; the packed weights (base64) never do. */
 function glyphs(): Array<[string, string]> {
-  return [...MODULE.matchAll(/^ {2}'([a-z0-9-]+)': '([^']+)',$/gm)].map((m) => [
+  return [...MODULE.matchAll(/^ {2}'([a-z0-9-]+)': '(<[^']+)',$/gm)].map((m) => [
     m[1] ?? '',
     m[2] ?? '',
   ]);
+}
+
+/** The alternative weights, unpacked the way the plugin does at runtime
+ *  (deflate raw + base64), as `weight/name` → body. They used to sit in the
+ *  module as plain text that no test here read; packed, they are only
+ *  checkable by decoding them. */
+function weightGlyphs(): Array<[string, string]> {
+  const table = MODULE.slice(MODULE.indexOf('const VARIANT_PACKED'), MODULE.indexOf('const unpacked'));
+  const out: Array<[string, string]> = [];
+  for (const [, weight, packed] of table.matchAll(/^ {2}'([a-z0-9-]+)': '([A-Za-z0-9+/=]+)',$/gm)) {
+    const rows = JSON.parse(inflateRawSync(Buffer.from(packed ?? '', 'base64')).toString('utf8')) as Record<string, string>;
+    for (const [name, body] of Object.entries(rows)) out.push([`${weight}/${name}`, body]);
+  }
+  return out;
 }
 
 /** Every `d="…"` inside a glyph body. */
@@ -142,7 +158,7 @@ test('glyph start points sit inside the grid the set declares', () => {
   const hiY = minY + h + slack;
 
   const offenders: string[] = [];
-  for (const [name, body] of glyphs()) {
+  for (const [name, body] of [...glyphs(), ...weightGlyphs()]) {
     for (const d of pathData(body)) {
       const m = /^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/.exec(d);
       if (!m) continue; // relative opening moveto — no absolute anchor to check
@@ -156,7 +172,9 @@ test('glyph start points sit inside the grid the set declares', () => {
 
 test('every glyph actually draws something', () => {
   const bad: string[] = [];
-  for (const [name, body] of glyphs()) {
+  const all = [...glyphs(), ...weightGlyphs()];
+  assert.ok(weightGlyphs().length > 500, 'the packed weights must decode to real tables');
+  for (const [name, body] of all) {
     if (drawables(body) === 0) {
       bad.push(`${name}: no drawing elements at all`);
       continue;
@@ -166,9 +184,10 @@ test('every glyph actually draws something', () => {
       if (!/^[Mm]/.test(d)) bad.push(`${name}: a path does not start with a moveto`);
       else if (/[^MmLlHhVvCcSsQqTtAaZz0-9eE.,\-+\s]/.test(d)) bad.push(`${name}: illegal char`);
     }
-    // The shredding bug produced 4-character stumps like "M208". Glyphs built
-    // from primitives have no `d` at all, so they are judged on body length.
-    if (body.length < 60) bad.push(`${name}: implausibly short body`);
+    // The shredding bug produced 4-character stumps like "M208", so a body
+    // made of paths is judged on its length. One made only of primitives has
+    // no `d` to shred: bold's `circle-dot` is a single 55-character disc.
+    if (pathData(body).length && body.length < 60) bad.push(`${name}: implausibly short body`);
   }
   assert.deepEqual(bad.slice(0, 5), []);
 });

@@ -1,6 +1,6 @@
 {
   "name": "portal",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "A Craft-style unified navigator for Obsidian: folders, tags, and collections in one sidebar rail.",
   "main": "main.js",
   "type": "module",
@@ -31,6 +31,7 @@
     "esbuild": "0.25.5",
     "eslint": "^9.39.4",
     "eslint-plugin-obsidianmd": "^0.4.0",
+    "fflate": "^0.8.3",
     "globals": "^17.6.0",
     "jiti": "^2.6.1",
     "obsidian": "1.13.1",
