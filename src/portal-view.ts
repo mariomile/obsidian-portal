@@ -234,6 +234,9 @@ export class PortalView extends ItemView {
       // Keyboard navigation: arrows move/expand/collapse, Enter opens/toggles.
       foldersBody.setAttribute('tabindex', '0');
       scope.registerDomEvent(foldersBody, 'keydown', (event: KeyboardEvent) => {
+        // Keys typed into the inline rename input belong to the input.
+        if (event.target instanceof HTMLInputElement) return;
+        if (this.handleFileKey(event, foldersBody)) return;
         this.folders?.handleKey(event);
       });
       scope.registerDomEvent(foldersBody, 'pointerdown', () => {
@@ -333,10 +336,40 @@ export class PortalView extends ItemView {
     if (!file) return;
     const selection = this.folders?.getSelection() ?? [];
     if (selection.length > 1 && selection.includes(path)) {
-      showBulkMenu(this.app, selection, anchor, (paths) => void this.pinned?.pinAll(paths));
+      showBulkMenu(this.app, file, selection, anchor, (paths) => void this.pinned?.pinAll(paths));
       return;
     }
     showFileMenu(this.app, file, anchor, row, this.menuActions());
+  }
+
+  /** Explorer file keys on the keyboard cursor: F2 renames, Delete/Backspace
+   *  deletes (the whole selection when the cursor is part of it). */
+  private handleFileKey(event: KeyboardEvent, body: HTMLElement): boolean {
+    const path = this.folders?.getCursorPath();
+    if (!path) return false;
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!file) return false;
+
+    if (event.key === 'F2') {
+      const row = body.querySelector(`.portal-tree-row[data-path="${CSS.escape(path)}"]`);
+      if (!(row instanceof HTMLElement)) return false;
+      event.preventDefault();
+      this.menuActions().renameInline(file, row);
+      return true;
+    }
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault();
+      const selection = this.folders?.getSelection() ?? [];
+      const paths = selection.length > 1 && selection.includes(path) ? selection : [path];
+      void (async () => {
+        for (const p of paths) {
+          const target = this.app.vault.getAbstractFileByPath(p);
+          if (target) await this.app.fileManager.promptForDeletion(target);
+        }
+      })();
+      return true;
+    }
+    return false;
   }
 
   private menuActions(): MenuActions {
