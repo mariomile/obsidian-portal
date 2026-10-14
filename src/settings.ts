@@ -4,7 +4,7 @@ import type { App } from 'obsidian';
 import type PortalPlugin from './main';
 import {
   PORTAL_SECTION_KEYS,
-  PORTAL_SECTION_LABELS,
+  sectionLabel,
   parseEnabledSections,
   parseSectionOrder,
   type PortalSectionKey,
@@ -15,7 +15,32 @@ import type { FolderOrder } from './sections/manual-order';
  *  tree is derived, so a dropped row would snap straight back. */
 export type SortMode = 'name' | 'modified' | 'created' | 'manual';
 
+/** One row of the nav block: runs `commandId`, hidden when it isn't registered. */
+export interface NavItem {
+  label: string;
+  icon: string;
+  commandId: string;
+}
+
+export const DEFAULT_NAV_ITEMS: NavItem[] = [
+  { label: 'New document', icon: 'hi-note-add', commandId: 'portal:new-note' },
+  { label: 'All Docs', icon: 'hi-file-01', commandId: 'masonry:open-all-docs' },
+  { label: 'Tasks', icon: 'hi-task', commandId: 'runway:open-list' },
+  { label: 'Calendar', icon: 'hi-calendar', commandId: 'horizon:open-calendar' },
+];
+
+const isNavItem = (v: unknown): v is NavItem =>
+  typeof v === 'object' &&
+  v !== null &&
+  typeof (v as NavItem).label === 'string' &&
+  typeof (v as NavItem).icon === 'string' &&
+  typeof (v as NavItem).commandId === 'string';
+
 export interface PortalSettings {
+  /** Nav block rows, top to bottom. An explicit empty list hides the block. */
+  navItems: NavItem[];
+  /** Header text for the Collections section; empty keeps "Collections". */
+  collectionsLabel: string;
   /** Folder-tree file ordering (folders always sort by name, first). */
   sortBy: SortMode;
   /** When true, the native file-explorer leaf is CSS-hidden so Portal is the
@@ -99,6 +124,8 @@ export interface PortalSettings {
 }
 
 export const DEFAULT_SETTINGS: PortalSettings = {
+  navItems: DEFAULT_NAV_ITEMS,
+  collectionsLabel: '',
   sortBy: 'name',
   hideNativeExplorer: true,
   expandedFolders: [],
@@ -155,6 +182,11 @@ export function parseSettings(raw: unknown): PortalSettings {
       ? data.sortBy
       : 'name';
   return {
+    navItems: Array.isArray(data.navItems)
+      ? data.navItems.filter(isNavItem).map((i) => ({ ...i }))
+      : DEFAULT_NAV_ITEMS.map((i) => ({ ...i })),
+    collectionsLabel:
+      typeof data.collectionsLabel === 'string' ? data.collectionsLabel.trim() : '',
     sortBy,
     hideNativeExplorer:
       typeof data.hideNativeExplorer === 'boolean'
@@ -367,6 +399,63 @@ export class PortalSettingTab extends PluginSettingTab {
           }),
       );
 
+    new Setting(containerEl).setName('Navigation').setHeading();
+    containerEl.createEl('p', {
+      cls: 'setting-item-description',
+      text: 'Rows at the top of Portal. Each runs an Obsidian command (see the command palette for ids) and is hidden when the command does not exist.',
+    });
+    const items = this.plugin.settings.navItems;
+    for (const [index, item] of items.entries()) {
+      const setting = new Setting(containerEl)
+        .addText((t) =>
+          t.setPlaceholder('Label').setValue(item.label).onChange((v) => void this.editNav(item, 'label', v)),
+        )
+        .addText((t) =>
+          t.setPlaceholder('Icon').setValue(item.icon).onChange((v) => void this.editNav(item, 'icon', v)),
+        )
+        .addText((t) =>
+          t
+            .setPlaceholder('Command id')
+            .setValue(item.commandId)
+            .onChange((v) => void this.editNav(item, 'commandId', v)),
+        );
+      setting.addExtraButton((b) =>
+        b.setIcon('arrow-up').setTooltip('Move up').setDisabled(index === 0).onClick(() => void this.moveNav(index, -1)),
+      );
+      setting.addExtraButton((b) =>
+        b
+          .setIcon('arrow-down')
+          .setTooltip('Move down')
+          .setDisabled(index === items.length - 1)
+          .onClick(() => void this.moveNav(index, 1)),
+      );
+      setting.addExtraButton((b) =>
+        b.setIcon('trash').setTooltip('Remove').onClick(() => void this.removeNav(index)),
+      );
+    }
+    new Setting(containerEl).addButton((b) =>
+      b.setButtonText('Add item').onClick(async () => {
+        items.push({ label: 'New item', icon: 'file', commandId: '' });
+        await this.plugin.saveSettings();
+        this.plugin.refreshRail();
+        this.display();
+      }),
+    );
+
+    new Setting(containerEl)
+      .setName('Collections header')
+      .setDesc('Rename the Collections section, for example to "Types". Empty keeps the default.')
+      .addText((t) =>
+        t
+          .setPlaceholder('Collections')
+          .setValue(this.plugin.settings.collectionsLabel)
+          .onChange(async (value) => {
+            this.plugin.settings.collectionsLabel = value.trim();
+            await this.plugin.saveSettings();
+            this.plugin.refreshRail();
+          }),
+      );
+
     new Setting(containerEl).setName('Sections').setHeading();
     containerEl.createEl('p', {
       cls: 'setting-item-description',
@@ -375,10 +464,10 @@ export class PortalSettingTab extends PluginSettingTab {
 
     for (const [index, key] of this.plugin.settings.sectionOrder.entries()) {
       const setting = new Setting(containerEl)
-        .setName(PORTAL_SECTION_LABELS[key])
+        .setName(sectionLabel(this.plugin.settings, key))
         .addToggle((toggle) =>
           toggle
-            .setTooltip(`Show ${PORTAL_SECTION_LABELS[key]}`)
+            .setTooltip(`Show ${sectionLabel(this.plugin.settings, key)}`)
             .setValue(this.plugin.settings.enabledSections.includes(key))
             .onChange(async (value) => {
               const enabled = this.plugin.settings.enabledSections;
@@ -395,14 +484,14 @@ export class PortalSettingTab extends PluginSettingTab {
       setting.addExtraButton((button) =>
         button
           .setIcon('arrow-up')
-          .setTooltip(`Move ${PORTAL_SECTION_LABELS[key]} up`)
+          .setTooltip(`Move ${sectionLabel(this.plugin.settings, key)} up`)
           .setDisabled(index === 0)
           .onClick(() => void this.moveSection(index, -1)),
       );
       setting.addExtraButton((button) =>
         button
           .setIcon('arrow-down')
-          .setTooltip(`Move ${PORTAL_SECTION_LABELS[key]} down`)
+          .setTooltip(`Move ${sectionLabel(this.plugin.settings, key)} down`)
           .setDisabled(index === this.plugin.settings.sectionOrder.length - 1)
           .onClick(() => void this.moveSection(index, 1)),
       );
@@ -417,6 +506,31 @@ export class PortalSettingTab extends PluginSettingTab {
     if (!currentKey || !targetKey) return;
     order[index] = targetKey;
     order[target] = currentKey;
+    await this.plugin.saveSettings();
+    this.plugin.refreshRail();
+    this.display();
+  }
+
+  private async editNav(item: NavItem, field: keyof NavItem, value: string): Promise<void> {
+    item[field] = value;
+    await this.plugin.saveSettings();
+    this.plugin.refreshRail();
+  }
+
+  private async moveNav(index: number, delta: -1 | 1): Promise<void> {
+    const items = this.plugin.settings.navItems;
+    const a = items[index];
+    const b = items[index + delta];
+    if (!a || !b) return;
+    items[index] = b;
+    items[index + delta] = a;
+    await this.plugin.saveSettings();
+    this.plugin.refreshRail();
+    this.display();
+  }
+
+  private async removeNav(index: number): Promise<void> {
+    this.plugin.settings.navItems.splice(index, 1);
     await this.plugin.saveSettings();
     this.plugin.refreshRail();
     this.display();

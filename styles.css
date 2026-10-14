@@ -198,7 +198,8 @@
 }
 /* Selection = a filled rounded pill with weight (Craft convention), NOT accent
    text — the fill carries the state so the rail stays calm. */
-.portal-file.is-active {
+.portal-file.is-active,
+.portal-open-tab.is-active {
   background-color: var(--portal-wash-strong);
   color: var(--nav-item-color-active, var(--text-normal));
   font-weight: var(--font-medium, 500);
@@ -325,7 +326,8 @@
   transition: opacity var(--portal-wash-motion), color var(--portal-wash-motion);
 }
 @media (hover: hover) {
-  .portal-pin:hover .portal-pin-remove {
+  .portal-pin:hover .portal-pin-remove,
+  .portal-open-tab:hover .portal-pin-remove {
     opacity: 1;
   }
   .portal-pin-remove:hover {
@@ -480,7 +482,7 @@
   bottom: -1px;
 }
 
-/* --- fixed nav block (New document / All Docs / Tasks / Calendar) --------- */
+/* --- nav block (configurable icon + label command rows) ------------------ */
 .portal-nav {
   padding: 0 var(--size-4-1, 4px) var(--size-4-2, 8px);
   margin-bottom: var(--size-4-1, 4px);
@@ -490,32 +492,6 @@
 }
 .portal-nav-row .portal-row-icon {
   color: var(--icon-color, var(--text-muted));
-}
-/* Calendar's hover-reveal shortcut straight to today's note — same ⇗
-   affordance as .portal-collection-open, kept as its own class since it
-   lives in the fixed nav block rather than a tree row. */
-.portal-nav-action {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  color: var(--text-faint);
-  opacity: 0;
-  transition: opacity var(--portal-wash-motion), color var(--portal-wash-motion);
-}
-.portal-nav-action svg {
-  width: 13px;
-  height: 13px;
-}
-@media (hover: hover) {
-  .portal-nav-row:hover .portal-nav-action {
-    opacity: 1;
-  }
-  .portal-nav-action:hover {
-    color: var(--text-normal);
-  }
 }
 
 /* --- mobile slice: touch targets + always-on affordances -----------------
@@ -553,10 +529,6 @@
      unreachable on touch (never behind a state the finger can't produce). */
   .portal-collection-open {
     opacity: 1;
-  }
-  .portal-nav-action {
-    opacity: 1;
-    width: var(--cosmos-touch-min, 44px);
   }
 }
 body.is-phone .portal-tree-row,

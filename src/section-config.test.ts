@@ -14,6 +14,7 @@ test('section order keeps valid persisted keys and appends missing sections', ()
     'bookmarks',
     'recent',
     'collections',
+    'open',
   ]);
 });
 

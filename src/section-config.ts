@@ -5,6 +5,7 @@ export const PORTAL_SECTION_KEYS = [
   'folders',
   'tags',
   'collections',
+  'open',
 ] as const;
 
 export type PortalSectionKey = (typeof PORTAL_SECTION_KEYS)[number];
@@ -16,6 +17,7 @@ export const PORTAL_SECTION_LABELS: Record<PortalSectionKey, string> = {
   folders: 'Folders',
   tags: 'Tags',
   collections: 'Collections',
+  open: 'Open',
 };
 
 const isPortalSectionKey = (value: string): value is PortalSectionKey =>
@@ -38,4 +40,14 @@ export function parseEnabledSections(value: unknown): PortalSectionKey[] {
   if (!Array.isArray(value)) return [...PORTAL_SECTION_KEYS];
   const stored = value.filter((item): item is string => typeof item === 'string');
   return [...new Set(stored.filter(isPortalSectionKey))];
+}
+
+/** Section header text, honouring the Collections rename. */
+export function sectionLabel(
+  settings: { collectionsLabel: string },
+  key: PortalSectionKey,
+): string {
+  return key === 'collections' && settings.collectionsLabel
+    ? settings.collectionsLabel
+    : PORTAL_SECTION_LABELS[key];
 }
