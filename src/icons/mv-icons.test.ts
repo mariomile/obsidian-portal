@@ -119,6 +119,32 @@ test('every weight is selectable, and the boot CSS follows it', () => {
   assert.match(main, /async applyIconVariant\(\)/);
 });
 
+test('the alternative weights ship packed, and only the chosen one is unpacked', () => {
+  // A user draws with one weight at a time, picked from a settings string, so
+  // esbuild cannot tell which tables are dead and bundled all six as plain
+  // text: ~690 KB of a ~1 MB main.js. Packed, they cost under a third of that.
+  const packed = source.slice(source.indexOf('const VARIANT_PACKED'), source.indexOf('const unpacked'));
+  assert.match(packed, /const VARIANT_PACKED: Record<string, string> = \{/);
+  assert.ok(!/^ {4}'[a-z0-9-]+': '</m.test(source), 'no weight may ship as a plain-text table');
+  // The set's own weight is PATHS already: shipping it again was 110 KB of
+  // duplicate.
+  const set = JSON.parse(
+    readFileSync(new URL('../kit/mv-icons-set.json', import.meta.url), 'utf8'),
+  ) as { variant: string };
+  const base = set.variant.replace(/\s+/g, '-');
+  assert.ok(!packed.includes(`'${base}':`), `${base} is the base weight and must not be packed`);
+  // Every other selectable weight must be there, or picking it silently
+  // leaves the base glyphs in place.
+  const ids = [...source.matchAll(/\{ id: '([a-z-]+)'/g)].map((m) => m[1] ?? '');
+  for (const id of ids.filter((v) => v !== base)) {
+    assert.ok(packed.includes(`  '${id}': '`), `weight ${id} is selectable but not packed`);
+  }
+  // Both readers go through the one decoder, synchronously: the registry has
+  // to be filled before any view renders, with no await in between.
+  assert.match(source, /function variantPaths\(variant\?: string\): Record<string, string>/);
+  assert.equal((source.match(/const alt = variantPaths\(variant\);/g) ?? []).length, 2);
+});
+
 test('the snippet is written where the timing works', () => {
   // A plugin's own stylesheet is injected when the plugin loads — the same
   // late moment as the JS. Only .obsidian/snippets is applied with the theme,
@@ -200,7 +226,7 @@ test('path data reaches the DOM whole, never split', () => {
 
   // And the stored strings must themselves be plausible whole paths, not the
   // 4-character stumps the split bug produced.
-  const values = [...source.matchAll(/^ {2}'[a-z0-9-]+': '([^']+)',$/gm)].map((m) => m[1] ?? '');
+  const values = [...source.matchAll(/^ {2}'[a-z0-9-]+': '(<[^']+)',$/gm)].map((m) => m[1] ?? '');
   assert.ok(values.length >= 100, `expected 100+ glyph entries, found ${values.length}`);
   for (const d of values) {
     assert.ok(d.length > 40, `suspiciously short path data (${d.length} chars): ${d}`);
@@ -307,13 +333,14 @@ test('accepts a scoped root, so callers can repaint one subtree', () => {
 });
 
 test('is mobile-safe: no Node/Electron builtins', () => {
-  // The only import allowed is `obsidian` (addIcon). Portal runs on iPhone.
+  // Only `obsidian` (addIcon) and `fflate` (pure JS inflate for the packed
+  // weights) are allowed. Portal runs on iPhone.
   const imports = source.match(/^import .*$/gm) ?? [];
   for (const line of imports) {
     assert.match(
       line,
-      /from 'obsidian'/,
-      `unexpected import (must be mobile-safe, obsidian-only): ${line}`,
+      /from '(obsidian|fflate)'/,
+      `unexpected import (must be mobile-safe, obsidian or fflate only): ${line}`,
     );
   }
   for (const banned of ['node:', 'electron', "require('fs", "require('path", 'process.']) {
