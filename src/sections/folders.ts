@@ -83,6 +83,11 @@ export class FoldersSection {
     return [...this.selected];
   }
 
+  /** Path under the keyboard cursor, if any. */
+  getCursorPath(): string | null {
+    return this.cursorPath;
+  }
+
   clearSelection(): void {
     if (this.selected.size === 0) return;
     this.selected.clear();

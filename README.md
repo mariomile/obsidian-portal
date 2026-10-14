@@ -18,7 +18,7 @@ Part of the marioverse Obsidian plugin suite.
 - **File-type icons**: ~50 extensions map to distinct icons; a note's `icon:` / `color:` frontmatter overrides them, and folders read the same keys from a same-named folder note.
 - **Tags & Collections inline**: click a tag to list its notes; click a collection (absorbed read-only from [SuperBaseTags](https://github.com/mariomile/obsidian-superbasetags)) to list its members, or open its Base with ⇗. Hex-colour tokens are filtered out of the tag tree.
 - **Search that shows where things are**: a jump box ranks results with [Sonar](https://github.com/mariomile/obsidian-sonar) (falls back to a substring filter), shows each hit's folder path, filters the tree live, and reveals the opened file in the tree.
-- **Full mutations**: right-click for the complete menu (rename, move, delete, new note/folder, pin) plus every item other plugins contribute; drag-to-move with link updates; inline rename.
+- **Full mutations**: right-click gives the same menu as Obsidian's file explorer (open in new tab, to the right or in a new window, duplicate, move, merge, copy path, reveal in Finder, new canvas/base, search in folder, version history, rename, delete) plus pin and every item other plugins contribute; multi-select gets the native bulk menu; F2 renames and Delete removes the focused item; drag-to-move with link updates; inline rename.
 - **Toolbar**: reveal active file, new note, sort, collapse-all / expand-all folders.
 - **Breadcrumb** of the active file, **keyboard navigation** (arrows / Enter / →←), and **native hover previews**.
 

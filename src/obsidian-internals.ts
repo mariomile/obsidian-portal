@@ -4,7 +4,7 @@
  * through here (via `as unknown as` narrowing — never `any`) and defensively
  * guarded, so the rest of the plugin stays clean and type-safe.
  */
-import type { App, WorkspaceLeaf } from 'obsidian';
+import type { App, Menu, WorkspaceLeaf } from 'obsidian';
 
 interface GlobalSearchInstance {
   openGlobalSearch(query: string): void;
@@ -66,6 +66,25 @@ export function executeCommand(app: App, id: string): boolean {
   return typeof commands?.executeCommandById === 'function'
     ? commands.executeCommandById(id)
     : false;
+}
+
+interface MenuWithSections {
+  addSections?: (sections: string[]) => unknown;
+}
+
+/** The section order the native file explorer declares on its file menu.
+ *  Items from core and community plugins carry these section ids, so the same
+ *  declaration makes them land in the same place inside Portal's menu. */
+export const NATIVE_FILE_MENU_SECTIONS = [
+  'title', 'open', 'action-primary', 'action', 'info', 'info.copy',
+  'view', 'system', '', 'danger',
+];
+
+/** `Menu.addSections` (untyped, used by the native explorer). No-op if absent:
+ *  the menu then falls back to insertion order. */
+export function addMenuSections(menu: Menu, sections: string[]): void {
+  const m = menu as unknown as MenuWithSections;
+  if (typeof m.addSections === 'function') m.addSections(sections);
 }
 
 interface LeafHistory {
