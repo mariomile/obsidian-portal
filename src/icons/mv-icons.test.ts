@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
+import { inflateSync, strFromU8 } from 'fflate';
 
 // `kit/mv-icons.ts` imports `obsidian` (for addIcon), unresolvable under
 // `node --test`. So these tests assert the module's invariants from its SOURCE
@@ -461,4 +464,47 @@ test('carries no Iconize dependency', () => {
     !/getIconizeAssignment|renderIconizeIcon|setIconForNode/.test(internals),
     'Iconize runtime access must not come back',
   );
+});
+
+test('the shipped alias resolver restores every repeated glyph', () => {
+  // Repeated glyphs ship as `'=<name>'` and only the resolver turns them back
+  // into bodies. A resolver that did nothing would still pass every text check
+  // above while ~100 icons rendered blank, so this evaluates the REAL function
+  // from the generated source (via node:vm), not a copy of its logic.
+  const fnStart = source.indexOf('function resolveAliases(');
+  const fnSource = source.slice(fnStart, source.indexOf('\n}\n', fnStart) + 2);
+  const resolveAliases = runInNewContext(`(${stripTypeScriptTypes(fnSource)})`) as (
+    table: Record<string, string>,
+  ) => Record<string, string>;
+
+  const litStart = source.indexOf('{', source.indexOf('const PATHS: Record<string, string> = resolveAliases('));
+  const literal = source.slice(litStart, source.indexOf('\n});\n', litStart) + 2);
+  const raw = runInNewContext(`(${literal})`) as Record<string, string>;
+  const aliases = Object.entries(raw).filter(([, d]) => d.startsWith('='));
+  assert.ok(aliases.length > 0, 'the base table is expected to carry aliases');
+
+  const resolved = resolveAliases({ ...raw });
+  for (const [name, d] of Object.entries(resolved)) {
+    assert.ok(!d.startsWith('='), `${name} is still an alias after resolving`);
+  }
+  for (const [name, ref] of aliases) {
+    const target = raw[ref.slice(1)];
+    assert.ok(target?.startsWith('<'), `${name} points at ${ref.slice(1)}, which is not a body`);
+    assert.equal(resolved[name], target, `${name} must equal the body of ${ref.slice(1)}`);
+  }
+
+  // The packed weights go through the same resolver after decompression.
+  const packed = source.slice(source.indexOf('const VARIANT_PACKED'), source.indexOf('const unpacked'));
+  const bold = /^ {2}'bold': '([^']+)',$/m.exec(packed)?.[1];
+  assert.ok(bold, 'the bold weight is expected to ship packed');
+  const variant = resolveAliases(
+    JSON.parse(strFromU8(inflateSync(Uint8Array.from(atob(bold), (c) => c.charCodeAt(0))))) as Record<
+      string,
+      string
+    >,
+  );
+  assert.ok(Object.keys(variant).length > 0);
+  for (const [name, d] of Object.entries(variant)) {
+    assert.ok(!d.startsWith('='), `bold ${name} is still an alias after resolving`);
+  }
 });
