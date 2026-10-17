@@ -38,10 +38,16 @@ const SET = JSON.parse(readFileSync(new URL('../kit/mv-icons-set.json', import.m
  *  not a bare `d` attribute: duotone glyphs are several paths at different
  *  opacities. Bodies start with `<`; the packed weights (base64) never do. */
 function glyphs(): Array<[string, string]> {
-  return [...MODULE.matchAll(/^ {2}'([a-z0-9-]+)': '(<[^']+)',$/gm)].map((m) => [
-    m[1] ?? '',
-    m[2] ?? '',
-  ]);
+  return resolved(
+    [...MODULE.matchAll(/^ {2}'([a-z0-9-]+)': '([<=][^']+)',$/gm)].map((m) => [m[1] ?? '', m[2] ?? '']),
+  );
+}
+
+/** A name whose glyph already appeared earlier in the same table is stored as
+ *  `'=<that name>'`; the module resolves it on load, and so do the tests. */
+function resolved(rows: Array<[string, string]>): Array<[string, string]> {
+  const byName = new Map(rows);
+  return rows.map(([name, body]) => [name, body.startsWith('=') ? (byName.get(body.slice(1)) ?? body) : body]);
 }
 
 /** The alternative weights, unpacked the way the plugin does at runtime
@@ -53,7 +59,7 @@ function weightGlyphs(): Array<[string, string]> {
   const out: Array<[string, string]> = [];
   for (const [, weight, packed] of table.matchAll(/^ {2}'([a-z0-9-]+)': '([A-Za-z0-9+/=]+)',$/gm)) {
     const rows = JSON.parse(inflateRawSync(Buffer.from(packed ?? '', 'base64')).toString('utf8')) as Record<string, string>;
-    for (const [name, body] of Object.entries(rows)) out.push([`${weight}/${name}`, body]);
+    for (const [name, body] of resolved(Object.entries(rows))) out.push([`${weight}/${name}`, body]);
   }
   return out;
 }

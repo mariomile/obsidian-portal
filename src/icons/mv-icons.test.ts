@@ -178,6 +178,13 @@ test('covers the custom names Portal has hard-coded in its own call sites', () =
   }
 });
 
+/** The stored body of a name, following `'=<name>'` aliases the way the module
+ *  does on load. */
+function glyphOf(name: string): string | undefined {
+  const value = source.match(new RegExp(`'${name}': '([^']+)'`))?.[1];
+  return value?.startsWith('=') ? glyphOf(value.slice(1)) : value;
+}
+
 test('resolves the Lucide alias pairs to a single glyph each', () => {
   // The suite accumulated both spellings of the same concept over time
   // (Lucide renamed several icons). Both must be registered, or whichever
@@ -187,9 +194,9 @@ test('resolves the Lucide alias pairs to a single glyph each', () => {
     ['alert-triangle', 'triangle-alert'],
     ['ellipsis', 'more-horizontal'],
     ['loader', 'loader-2'],
-  ]) {
-    const pathA = source.match(new RegExp(`'${a}': '([^']+)'`))?.[1];
-    const pathB = source.match(new RegExp(`'${b}': '([^']+)'`))?.[1];
+  ] as const) {
+    const pathA = glyphOf(a);
+    const pathB = glyphOf(b);
     assert.ok(pathA, `missing alias key: ${a}`);
     assert.ok(pathB, `missing alias key: ${b}`);
     assert.equal(pathA, pathB, `alias pair ${a}/${b} must share one glyph`);
