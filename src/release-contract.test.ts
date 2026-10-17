@@ -22,8 +22,8 @@ const versions = JSON.parse(
 test('the public release metadata is synchronized', () => {
   assert.equal(manifest.id, 'portal');
   assert.equal(manifest.name, 'Portal');
-  assert.equal(manifest.version, '0.8.2');
-  assert.equal(packageJson.version, '0.8.2');
+  assert.equal(manifest.version, '0.8.3');
+  assert.equal(packageJson.version, '0.8.3');
   assert.deepEqual(versions, {
     '0.1.0': '1.12.7',
     '0.1.1': '1.12.7',
@@ -62,6 +62,7 @@ test('the public release metadata is synchronized', () => {
     '0.8.0': '1.14.0',
     '0.8.1': '1.14.0',
     '0.8.2': '1.14.0',
+    '0.8.3': '1.14.0',
   });
   assert.equal(manifest.minAppVersion, '1.14.0');
 });
